@@ -13,7 +13,7 @@ Personal dev-project TUI for dested. `cd` into any project and run `destedtui` �
 - **Entry point:** `src/index.tsx` → arg parsing → `createCliRenderer` → `<App/>`
 - **Type-check:** `bun x tsc --noEmit`
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
-- **CLI flags:** `--backup`, `--restore` (jump straight to a screen), `--help`, `--version`
+- **CLI flags:** `--backup`, `--restore`, `--local`, `--pull` (jump straight to a screen), `--help`, `--version`
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
 
 ## Stack
@@ -31,27 +31,31 @@ Personal dev-project TUI for dested. `cd` into any project and run `destedtui` �
 
 ```
 src/
-  index.tsx             CLI entry: --help/--version/--backup/--restore, renderer boot
+  index.tsx             CLI entry: --help/--version/--backup/--restore/--local/--pull, renderer boot
   App.tsx               Route stack (push/pop), discovery kickoff, global ctrl+c quit
-  routes.ts             Route union type
+  routes.ts             Route union type (backup/restore carry optional presets)
   theme.ts              T = Tokyo Night palette + SPINNER_FRAMES (single source of color truth)
   components/
     Header.tsx          ascii-font "DESTED" gradient header + cwd
     Footer.tsx          keybind hint bar (Hint = [key, label])
     ListPicker.tsx      THE list primitive: windowed, keyboard+mouse, badges, disabled rows
-    ProgressBar.tsx     pct bar used by backup/restore
+    ProgressBar.tsx     pct bar used by backup/restore/pull
   screens/
     MainMenu.tsx        utility tiles incl. disabled "coming soon" rows
     Scripts.tsx         fuzzy-filterable flat list of every package script
     ProcessView.tsx     live script output: scrollbox + stickyScroll, spinner, kill
-    Backup.tsx          pick db → event log + progress → done/error
-    Restore.tsx         pickdb → pickzip → pickmode → confirm (type db name) → run
+    Backup.tsx          pick db (or presetUrl) → event log + progress → done/error
+    Restore.tsx         source (project zip | file path) → target (origin server | localhost existing/new) → run
+    LocalDb.tsx         localhost DB browser: list/create/drop + edit connection; launches backup/restore per DB
+    Pull.tsx            pick .env db → name local target → dump+restore into localhost, one shot
   lib/
     discovery.ts        walk tree: package.json scripts, .env DATABASE_URLs, PM detection
     pgurl.ts            parse postgres:// URL (PgConn), withDatabase()
-    pgtools.ts          server version detect, EDB binary download/cache, adminQuery
+    pgtools.ts          server version detect, EDB binary download/cache, adminQuery, adminRows, psql path
+    pglocal.ts          localhost conn config (~/.destedtui/config.json), list/create/drop local DBs
     backup.ts           startBackup(): connect → tools → pg_dump -Fc → streamed zip
-    restore.ts          listBackupZips(), startRestore(): extract → drop/create → pg_restore
+    restore.ts          listBackupZips(), startRestore(source, target): extract/zip|file → drop/create → pg_restore|psql
+    pull.ts             startPull(): dump source → create/overwrite localhost DB → pg_restore, no zip
     run.ts              Bun.spawn wrappers: runScript (line streaming), runTool, treeKill, killAll
     zip.ts              fflate streaming: createBackupZip, readZipMetadata, extractZipEntry
 ```
@@ -66,6 +70,11 @@ src/
 | Supported pg versions / download URLs | `src/lib/pgtools.ts` → `EDB_CANDIDATES`, `MAJOR_ORDER` |
 | Backup zip name/contents | `src/lib/backup.ts` (`pgbackup-<db>-<ts>.zip`, `<db>.dump` + `metadata.json`) |
 | Restore safety (drop/confirm) | `src/lib/restore.ts` + confirm UI in `src/screens/Restore.tsx` |
+| Localhost connection preset | `src/lib/pglocal.ts` (`~/.destedtui/config.json` → `localhost`); edit UI in `LocalDb.tsx` |
+| List/create/drop local DBs | `src/lib/pglocal.ts` (uses `adminRows`/`adminQuery`) |
+| Restore into localhost / from a file | `Restore.tsx` (target = localhost; source = file path) → `restore.ts` |
+| Clone remote → localhost | `src/lib/pull.ts` + `src/screens/Pull.tsx` |
+| Restore a raw .sql (not custom) | `restore.ts` `dumpKind()` → `psql -f` (else `pg_restore`) |
 | Process spawning / killing | `src/lib/run.ts` |
 | Keybind hints | each screen's `<Footer hints=…>` |
 

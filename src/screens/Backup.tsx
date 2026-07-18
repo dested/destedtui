@@ -4,19 +4,22 @@ import { SPINNER_FRAMES, T } from "../theme.ts";
 import { ListPicker } from "../components/ListPicker.tsx";
 import { Footer } from "../components/Footer.tsx";
 import { ProgressBar } from "../components/ProgressBar.tsx";
-import type { DatabaseInfo, Discovery } from "../lib/discovery.ts";
+import { redactUrl, type DatabaseInfo, type Discovery } from "../lib/discovery.ts";
 import { startBackup, type BackupEvent, type BackupJob, type BackupResult } from "../lib/backup.ts";
 import { fmtBytes } from "../lib/pgtools.ts";
 
 interface Props {
   discovery: Discovery;
   back: () => void;
+  /** When set, back up this exact database (e.g. from the Local Postgres browser) — skips the picker. */
+  presetUrl?: string;
+  presetLabel?: string;
 }
 
 type Phase = "pick" | "running" | "done" | "error";
 
-export function Backup({ discovery, back }: Props) {
-  const [phase, setPhase] = useState<Phase>(discovery.databases.length === 1 ? "pick" : "pick");
+export function Backup({ discovery, back, presetUrl, presetLabel }: Props) {
+  const [phase, setPhase] = useState<Phase>(presetUrl ? "running" : "pick");
   const [events, setEvents] = useState<BackupEvent[]>([]);
   const [result, setResult] = useState<BackupResult | null>(null);
   const [errorText, setErrorText] = useState("");
@@ -28,6 +31,19 @@ export function Backup({ discovery, back }: Props) {
     const t = setInterval(() => setFrame((f) => (f + 1) % SPINNER_FRAMES.length), 90);
     return () => clearInterval(t);
   }, [phase]);
+
+  useEffect(() => {
+    if (!presetUrl) return;
+    run({
+      envPath: "",
+      dir: process.cwd(),
+      rel: ".",
+      key: presetLabel ?? "localhost",
+      url: presetUrl,
+      redacted: redactUrl(presetUrl),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const run = (db: DatabaseInfo) => {
     setEvents([]);

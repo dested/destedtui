@@ -42,9 +42,25 @@ export function MainMenu({ discovery, go, quit }: Props) {
       id: "restore",
       icon: "↺",
       title: "PG Restore",
-      subtitle: "restore a backup zip — overwrite or side-by-side",
-      badge: discovery ? (dbCount > 0 ? "" : "no DATABASE_URL found") : "scanning...",
-      badgeColor: T.dim,
+      subtitle: "restore a zip/dump/file — original server or localhost",
+      badge: discovery ? (dbCount > 0 ? `${dbCount} database${dbCount === 1 ? "" : "s"}` : "from a file") : "scanning...",
+      badgeColor: dbCount > 0 ? T.green : T.cyan,
+    },
+    {
+      id: "localdb",
+      icon: "🖳",
+      title: "Local Postgres",
+      subtitle: "browse localhost DBs — create, drop, back up, restore into",
+      badge: "localhost",
+      badgeColor: T.cyan,
+    },
+    {
+      id: "pull",
+      icon: "⇩",
+      title: "Pull to Local",
+      subtitle: "clone a remote/.env database straight into localhost",
+      badge: discovery ? (dbCount > 0 ? `${dbCount} source${dbCount === 1 ? "" : "s"}` : "no DATABASE_URL found") : "scanning...",
+      badgeColor: dbCount > 0 ? T.green : T.dim,
       disabled: discovery !== null && dbCount === 0,
     },
     { id: "git", icon: "⎇", title: "Git Dashboard", subtitle: "branches, dirty files, quick actions", badge: "coming soon", disabled: true },
@@ -78,6 +94,8 @@ export function MainMenu({ discovery, go, quit }: Props) {
             if (item.id === "scripts") go({ name: "scripts" });
             else if (item.id === "backup") go({ name: "backup" });
             else if (item.id === "restore") go({ name: "restore" });
+            else if (item.id === "localdb") go({ name: "localdb" });
+            else if (item.id === "pull") go({ name: "pull" });
           }}
         />
       </box>

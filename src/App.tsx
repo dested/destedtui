@@ -10,6 +10,8 @@ import { Scripts } from "./screens/Scripts.tsx";
 import { ProcessView } from "./screens/ProcessView.tsx";
 import { Backup } from "./screens/Backup.tsx";
 import { Restore } from "./screens/Restore.tsx";
+import { LocalDb } from "./screens/LocalDb.tsx";
+import { Pull } from "./screens/Pull.tsx";
 
 export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string }) {
   const renderer = useRenderer();
@@ -43,9 +45,13 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
       {route.name === "menu" && <MainMenu discovery={discovery} go={go} quit={quit} />}
       {route.name === "scripts" && discovery && <Scripts discovery={discovery} go={go} back={back} />}
       {route.name === "process" && <ProcessView pkg={route.pkg} script={route.script} back={back} />}
-      {route.name === "backup" && discovery && <Backup discovery={discovery} back={back} />}
-      {route.name === "restore" && discovery && <Restore discovery={discovery} back={back} />}
-      {(route.name === "scripts" || route.name === "backup" || route.name === "restore") && !discovery && (
+      {route.name === "backup" && discovery && (
+        <Backup discovery={discovery} back={back} presetUrl={route.presetUrl} presetLabel={route.presetLabel} />
+      )}
+      {route.name === "restore" && discovery && <Restore discovery={discovery} back={back} preset={route.preset} />}
+      {route.name === "localdb" && <LocalDb go={go} back={back} />}
+      {route.name === "pull" && discovery && <Pull discovery={discovery} back={back} />}
+      {(route.name === "scripts" || route.name === "backup" || route.name === "restore" || route.name === "pull") && !discovery && (
         <box style={{ padding: 2 }}>
           <text fg={T.dim}>scanning project...</text>
         </box>

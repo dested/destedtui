@@ -1,43 +1,45 @@
 # PG Restore
 
-> Status: **done** · Last updated: 2026-07-18
+> Status: **done** · Last updated: 2026-07-18 (localhost target + file source)
 
 ## What / Why
 
-Restores a destedtui backup zip into the project's Postgres server — either safely side-by-side or over the original after an explicit typed confirmation. The destructive path is deliberately the harder one.
+Restores a dump into a Postgres database of your choosing. The **source** (where the dump is) and the **target** (where it lands) are independent: restore a project backup back onto its origin server, or drop any dump into your localhost server — into an existing DB (overwrite) or a fresh one you name. The destructive paths always require typing the DB name.
 
 ## Behavior spec
 
-- Flow: pick project (same discovery list as backup) → pick zip → pick mode → (overwrite only) confirm → run.
-- Zip list = `pgbackup-*.zip` in the project folder, newest first, each showing size, source server version (from metadata.json, read via streaming without loading the zip), and mtime. Empty → "run a backup first" hint.
-- Mode list (safe option first):
-  - **New database**: creates `<db>_restored_<yyyymmdd_hhmm>` and restores there; done screen prints the masked connection URL. Original untouched.
-  - **Overwrite**: requires typing the exact database name into an input (border turns green on match, enter enabled); then terminates backends, `DROP DATABASE IF EXISTS`, `CREATE DATABASE`, restores.
-- Restore = extract `.dump` from zip (streamed) → `pg_restore --no-owner --no-acl --role=<url user>` with version-matched tools (same `ensureTools` as backup). Admin queries go to the `postgres` maintenance DB, falling back to `template1`.
-- If backup's major ≠ target server's major, a note event is shown (not a block).
-- pg_restore non-zero exit → treated as "finished with warnings" (its exit 1 covers ignorable errors): done state + last 15 stderr lines. Hard failures before pg_restore (connect, extract, admin SQL) → error state.
-- Esc cancels a running restore (kills pg_restore) and steps back one sub-phase from any picker.
-- `--restore` flag jumps straight to this screen.
+- **Source pick** (`pickproject`): the discovery DB list *plus* a "Restore from a file…" row. Picking a project → `pickzip` (its `pgbackup-*.zip`, newest first, size + source version from streamed metadata.json). Picking "from a file" (or no `.env` DBs found at all) → `pickfile`, a path input accepting `.zip` / `.dump` / `.backup` / `.sql`.
+- **Target pick** (`picktarget`, only when the source is a project zip — it has an origin): **Original server** (the `.env` server) or **Localhost Postgres**. A file source skips straight to localhost.
+  - **Original server** → `pickmode`: New DB (`<db>_restored_<ts>`, safe, listed first) or Overwrite (typed confirm). Unchanged from the original behavior.
+  - **Localhost** → `connectlocal` (lists local DBs w/ sizes) → `picklocaldb`: "＋ Create a new database" (name it → create+restore) or an existing DB (typed-name confirm → drop+recreate → restore).
+- **Run** = resolve artifact (extract `.dump/.sql` from a zip, streamed, or use the file directly) → create/overwrite the target DB (`adminQuery` on the `postgres` maintenance DB, `template1` fallback) → restore. Custom archives → `pg_restore --no-owner --no-acl`; plain `.sql` → `psql -f --set=ON_ERROR_STOP=0`. Tools are the target server's major via `ensureTools`. Temp extract goes to the OS temp dir.
+- Target detection tries the maintenance DB first, so a not-yet-created target still resolves the server version. Version-mismatch (backup major ≠ target major) → note event, not a block.
+- `pg_restore`/`psql` non-zero exit → "finished with warnings" done state + last 15 stderr lines. Hard failures earlier (connect, extract, admin SQL) → error state; a local-connect failure points the user at the Local Postgres screen to fix creds.
+- **Preset target** (`preset` prop, set when launched from the Local Postgres browser): target DB is fixed to that local DB (mode `overwrite`); flow is just source-pick → typed confirm → run.
+- Esc steps back one sub-phase; `--restore` jumps here.
 
 ## Touchpoints
 
 | Part | File |
 | --- | --- |
-| Orchestration + zip listing | `src/lib/restore.ts` |
-| Admin SQL / tools | `src/lib/pgtools.ts` |
+| Orchestration (source→target), zip listing | `src/lib/restore.ts` |
+| Admin SQL / row queries / tools / psql path | `src/lib/pgtools.ts` |
+| Localhost conn + DB list | `src/lib/pglocal.ts` |
 | Streaming extract | `src/lib/zip.ts` |
-| UI incl. typed confirm | `src/screens/Restore.tsx` |
+| UI: source/target pickers + typed confirms | `src/screens/Restore.tsx` |
 
 ## Edge cases
 
-- Zip without a `.dump` entry → explicit "is it a destedtui backup?" error.
+- Zip without a `.dump/.backup/.sql` entry → explicit error.
+- New local DB name that already exists → blocked in the input ("pick it from the list to overwrite").
 - Db names quoted with `""`-escaping in DDL; terminate-backends uses `''`-escaped literal.
 - Overwrite of a DB with live connections → backends terminated first, so drop succeeds.
 
 ## Open questions
 
 - [ ] Cross-major restore (e.g. pg16 dump → pg14 server) is warned about but not blocked — acceptable for personal use; revisit if it ever bites.
+- [ ] `restore into an existing DB` always drops+recreates (clean slate). A `--clean`/merge-into-existing mode isn't offered; add if a real need appears.
 
 ## How to verify
 
-[heavy — ask first] Both modes covered by the e2e recipe in `verify.md`.
+[heavy — ask first] Lib layer covered by the smoke test in `verify.md` (pull + `.sql` file restore + overwrite vs live PG 18.3). TUI flow driven manually — no PTY in CI.

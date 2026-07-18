@@ -35,3 +35,13 @@ Requires: reachable Postgres with credentials; creates/drops `destedtui_smoke*` 
 2. `startBackup` → expect `pgbackup-*.zip` next to the `.env` with metadata
 3. `startRestore` mode "new" → row count + `max((data->>'sq')::int)` match seed
 4. `startRestore` mode "overwrite" → rows match again; drop both scratch DBs
+
+### Localhost target / pull / local-DB e2e [heavy — ask first]
+Requires: a **localhost** Postgres (`postgres@localhost:5432`, PG 18.x; password from your local env / the Local Postgres connection editor). Creates/drops `destedtui_smoke_*` DBs.
+Copy a scratch script into the repo (relative imports resolve from there), e.g. `.smoketest.ts`, and `bun ./.smoketest.ts`; delete after. It should:
+1. `createLocalDatabase` a source + seed rows.
+2. `startPull(source.url, {conn: localPgConn(local, DST), mode:"new"})` → assert restored row count.
+3. `startRestore({path: <a .sql file>}, {conn: localPgConn(local, SQL), mode:"new"})` → assert psql path loads rows.
+4. `startPull(..., mode:"overwrite")` on the existing DST → rows match again (drop+recreate works).
+5. `listLocalDatabases` shows all three; `dropLocalDatabase` cleans them up in `finally`.
+(This exact script passed vs live PG 18.3 on 2026-07-18.)

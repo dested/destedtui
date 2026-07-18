@@ -12,6 +12,8 @@ export const CACHE_DIR = join(homedir(), ".destedtui", "pg");
 export interface PgTools {
   pgDump: string;
   pgRestore: string;
+  /** psql — used to load plain-text .sql dumps */
+  psql: string;
   /** "downloaded" = version-matched cached binaries, "path" = whatever is on PATH */
   source: "downloaded" | "path";
   /** major version of the tools, e.g. "16" or "9.6" */
@@ -125,6 +127,37 @@ export async function adminQuery(
   }
 }
 
+/** Run a single row-returning query against a maintenance DB on the server. */
+export async function adminRows<T = Record<string, unknown>>(
+  conn: PgConn,
+  ssl: boolean,
+  sql: string,
+  maintenanceDb = "postgres",
+): Promise<T[]> {
+  const client = new Client({
+    host: conn.host,
+    port: conn.port,
+    user: conn.user,
+    password: conn.password,
+    database: maintenanceDb,
+    ssl: ssl ? { rejectUnauthorized: false } : false,
+    connectionTimeoutMillis: 8000,
+  });
+  try {
+    await client.connect();
+  } catch (err) {
+    await client.end().catch(() => {});
+    if (maintenanceDb === "postgres") return adminRows<T>(conn, ssl, sql, "template1");
+    throw new Error(`Could not connect to ${conn.host}:${conn.port}: ${msg(err)}`);
+  }
+  try {
+    const res = await client.query(sql);
+    return res.rows as T[];
+  } finally {
+    await client.end().catch(() => {});
+  }
+}
+
 function binName(name: string): string {
   return process.platform === "win32" ? `${name}.exe` : name;
 }
@@ -133,8 +166,9 @@ function cachedTools(major: string): PgTools | null {
   const bin = join(CACHE_DIR, major, "bin");
   const pgDump = join(bin, binName("pg_dump"));
   const pgRestore = join(bin, binName("pg_restore"));
+  const psql = join(bin, binName("psql"));
   if (existsSync(pgDump) && existsSync(pgRestore)) {
-    return { pgDump, pgRestore, source: "downloaded", toolMajor: major };
+    return { pgDump, pgRestore, psql, source: "downloaded", toolMajor: major };
   }
   return null;
 }
@@ -142,6 +176,7 @@ function cachedTools(major: string): PgTools | null {
 async function toolsFromPath(serverMajor: string, onProgress: (p: ToolProgress) => void): Promise<PgTools | null> {
   const pgDump = Bun.which(binName("pg_dump").replace(/\.exe$/, ""));
   const pgRestore = Bun.which(binName("pg_restore").replace(/\.exe$/, ""));
+  const psql = Bun.which(binName("psql").replace(/\.exe$/, "")) ?? "psql";
   if (!pgDump || !pgRestore) return null;
   try {
     const proc = Bun.spawn([pgDump, "--version"], { stdout: "pipe", stderr: "pipe" });
@@ -156,7 +191,7 @@ async function toolsFromPath(serverMajor: string, onProgress: (p: ToolProgress) 
       });
       return null;
     }
-    return { pgDump, pgRestore, source: "path", toolMajor };
+    return { pgDump, pgRestore, psql, source: "path", toolMajor };
   } catch {
     return null;
   }
