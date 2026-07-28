@@ -5,6 +5,7 @@ import { Footer } from "../components/Footer.tsx";
 import { CARD_HEIGHT, CARD_MIN_WIDTH, ProjectCard } from "../components/ProjectCard.tsx";
 import {
   inspectProject,
+  parseQuery,
   scanProjects,
   sortProjects,
   type ProjectDetail,
@@ -58,7 +59,8 @@ export function Projects({ root, choose, leave }: Props) {
   const inspectSeq = useRef(0);
   const { width, height } = useTerminalDimensions();
 
-  const q = filter.trim().toLowerCase();
+  const parsed = useMemo(() => parseQuery(filter, root), [filter, root]);
+  const q = parsed.query.trim().toLowerCase();
   const visible = useMemo(() => {
     if (!q) return sortProjects(projects, sort);
     const scored = projects.map((p) => ({ p, s: score(p, q) })).filter(({ s }) => s > 0);
@@ -202,7 +204,8 @@ export function Projects({ root, choose, leave }: Props) {
         <box style={{ flexDirection: "row", justifyContent: "space-between", height: 1, width: inner }}>
           <text>
             <span fg={T.teal}>{"❯ "}</span>
-            <span fg={T.fg}>{filter}</span>
+            {parsed.ignored ? <span fg={T.dim}>{parsed.ignored}</span> : null}
+            <span fg={T.fg}>{parsed.rest}</span>
             <span fg={T.teal}>▏</span>
             {filter ? null : <span fg={T.dim}>type to filter</span>}
           </text>
@@ -232,7 +235,7 @@ export function Projects({ root, choose, leave }: Props) {
             if (e.scroll) scroll(e.scroll.direction === "up" ? -1 : 1);
           }}
         >
-          {count === 0 && <text fg={T.dim}>{q ? `Nothing matches "${filter}"` : `No folders in ${root}`}</text>}
+          {count === 0 && <text fg={T.dim}>{q ? `Nothing matches "${parsed.query}"` : `No folders in ${root}`}</text>}
           {gridRows.map((cards, r) => (
             <box key={`row-${topRow + r}`} style={{ flexDirection: "row", gap: GAP, height: CARD_HEIGHT }}>
               {cards.map((p, c) => {

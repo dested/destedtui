@@ -27,6 +27,19 @@ last touched → name) · `esc` clears the filter, or leaves if it's empty ·
 The screen owns its own type-ahead rather than mounting an `<input>`, because a
 focused input swallows `←`/`→` as cursor moves and the grid needs them.
 
+### Typing what you'd have typed at a prompt
+
+The picker replaces a prompt, so half the time you type `cd drydock` out of
+habit. `parseQuery` strips the part that isn't a project name and dims it in the
+search line, so it never looks like the filter broke:
+
+| You type | Matched on |
+| --- | --- |
+| `cd drydock`, `cod dry`, `z dry`, `zi`/`ls`/`dir`/`pushd` + name | the name |
+| `g:\code\drydock`, `cd G:/CODE/DryDock` | `DryDock` |
+| `cd g:\code\drydock\src` | `drydock` (we can only jump to a project) |
+| `cd` / `cdk` / `code` alone | themselves — a verb only counts with a space after it |
+
 ## Ranking
 
 `score = own frecency + zoxide score`, sorted desc, ties broken by last-touched.

@@ -271,6 +271,54 @@ export function fmtAgo(at: number | null): string {
   return `${Math.round(d / 365)}y ago`;
 }
 
+export interface ParsedQuery {
+  /** The part we're deliberately not matching on — rendered dim. */
+  ignored: string;
+  /** Everything after it, exactly as typed. */
+  rest: string;
+  /** What actually gets matched. */
+  query: string;
+}
+
+/** Navigation verbs that muscle memory types before a project name. */
+const NAV_PREFIX = /^(cd|cod|z|zi|ls|dir|pushd)\s+/i;
+
+/**
+ * The picker opens where a prompt used to be, so half the time you type
+ * `cd drydock` — or paste `g:\code\drydock\src`. Strip the parts that aren't a
+ * project name and match on what's left, showing the ignored bit dimmed so it
+ * never looks like the filter is broken.
+ */
+export function parseQuery(raw: string, root: string): ParsedQuery {
+  let rest = raw;
+  let ignored = "";
+  const take = (n: number) => {
+    ignored += rest.slice(0, n);
+    rest = rest.slice(n);
+  };
+
+  const lead = /^\s+/.exec(rest);
+  if (lead) take(lead[0].length);
+
+  const cmd = NAV_PREFIX.exec(rest);
+  if (cmd) take(cmd[0].length);
+
+  const dot = /^\.[\\/]/.exec(rest);
+  if (dot) take(2);
+
+  // An absolute path into the root: keep only what follows it.
+  const rootKey = root.replace(/[\\/]+$/, "");
+  const norm = (s: string) => s.replace(/[\\/]+/g, "/").toLowerCase();
+  const normRest = norm(rest);
+  const normRoot = norm(rootKey);
+  if (normRest.startsWith(`${normRoot}/`)) take(rootKey.length + 1);
+  else if (normRest === normRoot) take(rest.length);
+
+  // We can only jump to a project, so a deeper path matches its first segment.
+  const query = rest.replace(/[\\/]+$/, "").split(/[\\/]/)[0] ?? "";
+  return { ignored, rest, query };
+}
+
 export interface ProjectDetail {
   dir: string;
   branch: string | null;

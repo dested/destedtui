@@ -78,6 +78,7 @@ src/
 | Which folders show in the picker / how they rank | `src/lib/projects.ts` (`scanProjects`, `SKIP`, `decay`, `zoxideScores`) |
 | Stack badge detection (next/rust/go/…) | `src/lib/projects.ts` → `detectStack`; colors in `ProjectCard.tsx` → `STACK_COLORS` |
 | Card size / grid columns | `ProjectCard.tsx` (`CARD_HEIGHT`, `CARD_MIN_WIDTH`), geometry block in `Projects.tsx` |
+| Ignoring `cd `/paths typed into the filter | `src/lib/projects.ts` → `parseQuery`, `NAV_PREFIX` |
 | The picker's cd handoff | `src/lib/cd.ts` + `chooseProject` in `App.tsx` + `proj` in `shell/destedtui.ps1` |
 | When the picker auto-opens | `Test-DestedTuiAutostart` in `shell/destedtui.ps1` |
 | Projects root (default `g:\code`) | `projectsRoot()` — `DESTEDTUI_PROJECTS_ROOT` > config `projectsRoot` > platform default |

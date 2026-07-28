@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-07-28 — picker filter ignores `cd ` and pasted paths
+Asked: "sometimes im typing and i just want it to filter as i type. i might also type `cd thing` so ignore the cd". Done: `parseQuery(raw, root)` in `lib/projects.ts` strips a leading nav verb (`cd`/`cod`/`z`/`zi`/`ls`/`dir`/`pushd` + space), a `.\` prefix, and an absolute path into the projects root, then matches on the first remaining path segment (`cd g:\code\drydock\src` → `drydock`). The stripped part renders dim in the search line so it's visibly ignored rather than silently eaten; a verb without a trailing space (`cd`, `cdk`, `code`) is still matched literally. 20-case parser test passed, checked live with `cd sonic` and a full pasted path.
+Touched: lib/projects.ts, screens/Projects.tsx, docs
+
 ## 2026-07-28 — picker redesigned as a click-first card grid
 Asked: "bigger. cards, not list. i want to click and i want to click fast" + clear the screen after clicking. Done: `Projects.tsx` rewritten as a reflowing grid of `ProjectCard`s (new component; 5 rows tall, 5 columns at 170 cols → 3 at 92, leftover width divided back into the cards so it fills edge to edge). Hover highlights, single click goes — no confirm step; wheel scrolls; arrows/home/end/pgup/pgdn navigate. Dropped the `<input>` for a self-owned type-ahead, because a focused input eats `←`/`→` that the grid needs. The side detail pane became one status line under the grid (path · ahead/behind · dirty or clean · last commit). `announceCd` now clears screen + scrollback before printing `➜ cd …`, so you land on a clean terminal. Verified in tmux at 170×48 and 92×30; e2e `proj` → filter → enter landed a real shell in `g:\code\untangle` with a cleared screen. `tsc` clean.
 Touched: components/ProjectCard.tsx (new), screens/Projects.tsx (rewrite), lib/cd.ts, docs
