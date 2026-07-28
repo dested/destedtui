@@ -13,6 +13,8 @@ export interface ProjectInfo {
   description: string;
   /** Detected stack label — see STACKS below */
   stack: string;
+  /** Ready-to-run dev command (`bun run dev`), or null when there's no script */
+  devCommand: string | null;
   isGit: boolean;
   branch: string | null;
   /** Newest of the folder / .git mtime — "last touched" */
@@ -99,16 +101,36 @@ function decay(ageMs: number): number {
   return 0.25;
 }
 
+/** Which package manager this project's lockfile implies. */
+function detectPm(files: Set<string>): string {
+  if (files.has("bun.lock") || files.has("bun.lockb")) return "bun";
+  if (files.has("pnpm-lock.yaml")) return "pnpm";
+  if (files.has("yarn.lock")) return "yarn";
+  if (files.has("package-lock.json")) return "npm";
+  return "bun";
+}
+
+interface StackInfo {
+  stack: string;
+  pkgName: string | null;
+  description: string;
+  devCommand: string | null;
+}
+
 /** Framework/language guess, first match wins. */
-function detectStack(files: Set<string>, dir: string): { stack: string; pkgName: string | null; description: string } {
+function detectStack(files: Set<string>, dir: string): StackInfo {
   let pkgName: string | null = null;
   let description = "";
+  let devCommand: string | null = null;
 
   if (files.has("package.json")) {
     try {
       const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
       if (typeof pkg?.name === "string") pkgName = pkg.name;
       if (typeof pkg?.description === "string") description = pkg.description;
+      const scripts = pkg?.scripts && typeof pkg.scripts === "object" ? pkg.scripts : {};
+      const script = ["dev", "start", "serve"].find((s) => typeof scripts[s] === "string");
+      if (script) devCommand = `${detectPm(files)} run ${script}`;
       const deps: Record<string, string> = { ...(pkg?.dependencies ?? {}), ...(pkg?.devDependencies ?? {}) };
       const has = (name: string) => Object.hasOwn(deps, name);
       const stack = has("next")
@@ -138,24 +160,24 @@ function detectStack(files: Set<string>, dir: string): { stack: string; pkgName:
                               : files.has("bun.lock") || files.has("bun.lockb")
                                 ? "bun"
                                 : "node";
-      return { stack, pkgName, description };
+      return { stack, pkgName, description, devCommand };
     } catch {
-      return { stack: "node", pkgName, description };
+      return { stack: "node", pkgName, description, devCommand };
     }
   }
 
-  if (files.has("cargo.toml")) return { stack: "rust", pkgName, description };
-  if (files.has("go.mod")) return { stack: "go", pkgName, description };
-  if (files.has("pyproject.toml") || files.has("requirements.txt") || files.has("setup.py"))
-    return { stack: "python", pkgName, description };
-  if (files.has("pubspec.yaml")) return { stack: "flutter", pkgName, description };
-  if (files.has("gemfile")) return { stack: "ruby", pkgName, description };
-  if (files.has("composer.json")) return { stack: "php", pkgName, description };
-  if (files.has("pom.xml") || files.has("build.gradle")) return { stack: "java", pkgName, description };
-  if (files.has("index.html")) return { stack: "web", pkgName, description };
-  for (const f of files) if (f.endsWith(".sln") || f.endsWith(".csproj")) return { stack: "dotnet", pkgName, description };
+  const plain = (stack: string): StackInfo => ({ stack, pkgName, description, devCommand });
+  if (files.has("cargo.toml")) return plain("rust");
+  if (files.has("go.mod")) return plain("go");
+  if (files.has("pyproject.toml") || files.has("requirements.txt") || files.has("setup.py")) return plain("python");
+  if (files.has("pubspec.yaml")) return plain("flutter");
+  if (files.has("gemfile")) return plain("ruby");
+  if (files.has("composer.json")) return plain("php");
+  if (files.has("pom.xml") || files.has("build.gradle")) return plain("java");
+  if (files.has("index.html")) return plain("web");
+  for (const f of files) if (f.endsWith(".sln") || f.endsWith(".csproj")) return plain("dotnet");
 
-  return { stack: "", pkgName, description };
+  return plain("");
 }
 
 function readBranch(dir: string): string | null {
@@ -223,7 +245,7 @@ export function scanProjects(root: string): ProjectInfo[] {
       }
     }
 
-    const { stack, pkgName, description } = detectStack(files, dir);
+    const { stack, pkgName, description, devCommand } = detectStack(files, dir);
     const stat = opens[keyOf(dir)];
     const own = stat ? stat.n * decay(now - stat.at) : 0;
 
@@ -233,6 +255,7 @@ export function scanProjects(root: string): ProjectInfo[] {
       pkgName: pkgName && pkgName !== name ? pkgName : null,
       description,
       stack,
+      devCommand,
       isGit,
       branch: isGit ? readBranch(dir) : null,
       mtime,

@@ -24,6 +24,20 @@ Keys: type to filter · `↑↓←→` move · `enter` go · `tab` cycle sort (m
 last touched → name) · `esc` clears the filter, or leaves if it's empty ·
 `ctrl+u` clears · `home`/`end`/`pgup`/`pgdn`.
 
+### Card buttons
+
+Each card carries its own click targets, which `stopPropagation` so the card's
+own cd doesn't also fire:
+
+| Button | Runs | Key |
+| --- | --- | --- |
+| `▶ dev` | `<pm> run dev` (or `start`/`serve`), pm from the lockfile. Absent when the project has no such script. | `ctrl+d` |
+| `✦ claude` | `claude --dangerously-skip-permissions` | `ctrl+k` |
+
+Both cd first, then run **in your shell** — destedtui has already exited, so the
+command owns the terminal. That's the point: an interactive agent can't live
+inside a nested TUI.
+
 The screen owns its own type-ahead rather than mounting an `<input>`, because a
 focused input swallows `←`/`→` as cursor moves and the grid needs them.
 
@@ -57,9 +71,11 @@ A child process cannot change its parent's directory. So:
 
 1. `proj` creates a temp file and exports `DESTEDTUI_CD_FILE`.
 2. On click/enter, `App.chooseProject` records the open, writes the chosen path
-   to that file (`lib/cd.ts`), tears the renderer down, **clears the screen and
-   scrollback**, prints `➜  cd <dir>`, exits.
-3. `proj` reads the file, deletes it, and `Set-Location`s.
+   to that file (`lib/cd.ts`) — **line 1 the directory, optional line 2 a
+   command** — tears the renderer down, **clears the screen and scrollback**,
+   prints `➜  cd <dir>` (and `➜  <command>`), exits.
+3. `proj` reads the file, deletes it, `Set-Location`s, and `Invoke-Expression`s
+   the command if there is one.
 
 Run without the wrapper and it still prints the path plus a hint to run
 `destedtui --install-shell`.

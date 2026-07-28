@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { T } from "../theme.ts";
 import { Footer } from "../components/Footer.tsx";
-import { CARD_HEIGHT, CARD_MIN_WIDTH, ProjectCard } from "../components/ProjectCard.tsx";
+import { CARD_HEIGHT, CARD_MIN_WIDTH, CLAUDE_COMMAND, ProjectCard } from "../components/ProjectCard.tsx";
 import {
   inspectProject,
   parseQuery,
@@ -15,8 +15,8 @@ import {
 
 interface Props {
   root: string;
-  /** Records the open, hands the path to the shell, and quits. */
-  choose: (dir: string) => void;
+  /** Records the open, hands the path (+ optional command) to the shell, and quits. */
+  choose: (dir: string, command?: string) => void;
   /** esc: pop back to the menu, or quit when this screen IS the app. */
   leave: () => void;
 }
@@ -124,8 +124,11 @@ export function Projects({ root, choose, leave }: Props) {
   // This screen owns its own type-ahead instead of mounting an <input>: the
   // grid needs left/right, which a focused input would eat as cursor moves.
   useKeyboard((key) => {
-    if (key.ctrl && key.name === "u") {
-      setFilter("");
+    if (key.ctrl) {
+      // Keyboard twins for the card buttons — the mouse must never be required.
+      if (key.name === "u") setFilter("");
+      else if (key.name === "d" && current?.devCommand) choose(current.dir, current.devCommand);
+      else if (key.name === "k" && current) choose(current.dir, CLAUDE_COMMAND);
       return;
     }
     switch (key.name) {
@@ -248,6 +251,7 @@ export function Projects({ root, choose, leave }: Props) {
                     selected={i === index}
                     onHover={() => setSelected(i)}
                     onClick={() => choose(p.dir)}
+                    onRun={(command) => choose(p.dir, command)}
                   />
                 );
               })}
@@ -262,7 +266,9 @@ export function Projects({ root, choose, leave }: Props) {
           ["click", "go"],
           ["type", "filter"],
           ["↑↓←→", "move"],
-          ["enter", "go"],
+          ["enter", "cd"],
+          ["ctrl+d", "dev"],
+          ["ctrl+k", "claude"],
           ["tab", "sort"],
           ["esc", "cancel"],
         ]}

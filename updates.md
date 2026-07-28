@@ -2,6 +2,11 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-07-28 — dev / claude buttons inside each card
+Asked: a clickable button inside the card — "bun dev" and a claude agent button running `claude --dangerously-skip-permissions` — with a plain card click still meaning just cd. Done: the handoff file grew an optional second line (command), `proj` `Invoke-Expression`s it after `Set-Location`, so the command runs in the real interactive shell with destedtui already gone. `▶ dev` derives from the project (`<pm> run dev|start|serve`, pm from the lockfile) and is absent when there's no script; `✦ claude` is always there. Buttons `stopPropagation` so the card's cd doesn't also fire; `ctrl+d`/`ctrl+k` are the keyboard twins. Card grew to 6 rows. Verified by synthetic SGR clicks: dev button → handoff `[dir, "bun run dev"]`, claude → `[dir, "claude --dangerously-skip-permissions"]`, card body → dir only; and end-to-end through `proj`, where clicking dev on destedtui cd'd there and actually launched `bun run dev`.
+Touched: components/ProjectCard.tsx, screens/Projects.tsx, lib/projects.ts (devCommand + detectPm), lib/cd.ts, App.tsx, shell/destedtui.ps1, docs
+Noticed: hover highlight is real (proved by injecting SGR motion events) but the user sees it start working a beat after launch — Windows Terminal only reports motion once the pointer actually moves inside the window; nothing in our code gates it.
+
 ## 2026-07-28 — picker filter ignores `cd ` and pasted paths
 Asked: "sometimes im typing and i just want it to filter as i type. i might also type `cd thing` so ignore the cd". Done: `parseQuery(raw, root)` in `lib/projects.ts` strips a leading nav verb (`cd`/`cod`/`z`/`zi`/`ls`/`dir`/`pushd` + space), a `.\` prefix, and an absolute path into the projects root, then matches on the first remaining path segment (`cd g:\code\drydock\src` → `drydock`). The stripped part renders dim in the search line so it's visibly ignored rather than silently eaten; a verb without a trailing space (`cd`, `cdk`, `code`) is still matched literally. 20-case parser test passed, checked live with `cd sonic` and a full pasted path.
 Touched: lib/projects.ts, screens/Projects.tsx, docs

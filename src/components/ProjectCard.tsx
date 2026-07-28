@@ -1,7 +1,10 @@
 import { T } from "../theme.ts";
 import { fmtAgo, type ProjectInfo } from "../lib/projects.ts";
 
-export const CARD_HEIGHT = 5;
+export const CARD_HEIGHT = 6;
+
+/** What the claude button runs, in the project, in your shell. */
+export const CLAUDE_COMMAND = "claude --dangerously-skip-permissions";
 /** Never render a card narrower than this — three lines of text need the room. */
 export const CARD_MIN_WIDTH = 28;
 
@@ -43,15 +46,46 @@ function pad(s: string, n: number): string {
   return t + " ".repeat(Math.max(0, n - t.length));
 }
 
+/** A click target inside a card. Stops propagation so the card doesn't also fire. */
+function Button({
+  label,
+  color,
+  onPress,
+}: {
+  label: string;
+  color: string;
+  onPress: () => void;
+}) {
+  return (
+    <box
+      style={{
+        height: 1,
+        flexShrink: 0,
+        paddingLeft: 1,
+        paddingRight: 1,
+        backgroundColor: T.surfaceAlt,
+      }}
+      onMouseDown={(e) => {
+        e.stopPropagation();
+        onPress();
+      }}
+    >
+      <text fg={color}>{label}</text>
+    </box>
+  );
+}
+
 interface Props {
   project: ProjectInfo;
   width: number;
   selected: boolean;
   onHover: () => void;
   onClick: () => void;
+  /** Run a command in the project after cd-ing there. */
+  onRun: (command: string) => void;
 }
 
-export function ProjectCard({ project, width, selected, onHover, onClick }: Props) {
+export function ProjectCard({ project, width, selected, onHover, onClick, onRun }: Props) {
   const inner = width - 4; // border 2 + padding 2
   const stack = project.stack;
   const stackColor = STACK_COLORS[stack] ?? T.dim;
@@ -93,6 +127,12 @@ export function ProjectCard({ project, width, selected, onHover, onClick }: Prop
         <span fg={project.branch ? T.purple : T.dim}>{branch}</span>
         <span fg={T.dim}>{` ${right}`}</span>
       </text>
+      <box style={{ flexDirection: "row", gap: 1, height: 1, width: inner }}>
+        {project.devCommand ? (
+          <Button label="▶ dev" color={T.green} onPress={() => onRun(project.devCommand!)} />
+        ) : null}
+        <Button label="✦ claude" color={T.purple} onPress={() => onRun(CLAUDE_COMMAND)} />
+      </box>
     </box>
   );
 }

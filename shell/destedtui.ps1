@@ -33,10 +33,17 @@ function proj {
     }
 
     if (Test-Path -LiteralPath $cdFile) {
-        $target = (Get-Content -Raw -LiteralPath $cdFile).Trim()
+        # Line 1 is the directory; an optional line 2 is a command to run there
+        # (the card's dev / claude buttons). Running it HERE rather than inside
+        # destedtui is the whole point: it gets your real interactive terminal.
+        $lines  = @(Get-Content -LiteralPath $cdFile)
+        $target = if ($lines.Count -gt 0) { $lines[0].Trim() } else { '' }
+        $cmd    = if ($lines.Count -gt 1) { $lines[1].Trim() } else { '' }
         Remove-Item -LiteralPath $cdFile -Force -ErrorAction SilentlyContinue
+
         if ($target -and (Test-Path -LiteralPath $target)) {
             Set-Location -LiteralPath $target
+            if ($cmd) { Invoke-Expression $cmd }
         }
     }
 }

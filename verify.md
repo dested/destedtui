@@ -26,6 +26,10 @@ Touchpoints: `src/lib/projects.ts`, `src/screens/Projects.tsx`, `src/lib/cd.ts`
 1. Scratch script: `scanProjects(projectsRoot())` → expect ~220 rows, scan under ~100ms, branches populated, `inspectProject` on a known repo returning branch/dirty/last-commit.
 2. In a **real** terminal: `proj`, click a card (or type a name + enter) → screen clears, the shell is now in that folder and printed `➜  cd …`; `~/.destedtui/config.json` gained a `projectOpens` entry and that project floats up the grid next time.
 3. `esc` with a filter typed clears the filter; `esc` again closes and the shell stays put.
+4. Card buttons: point `DESTEDTUI_CD_FILE` at a temp file, run `--projects`, click `▶ dev` / `✦ claude` / the card body, and read the file — expect `[dir, "<pm> run dev"]`, `[dir, "claude --dangerously-skip-permissions"]`, and `[dir]` respectively. Buttons that don't `stopPropagation` show up as a missing second line.
+
+### Driving the picker with a real mouse [cheap]
+tmux `send-keys -H` does NOT decode hex in this psmux build (it types the digits). Send the escape byte instead: `ESC=$(printf '\033'); tmux send-keys -t <s> -l "${ESC}[<0;COL;ROWM"` to press and `...m` to release; button 35 is motion, which is how you test hover. Cards are `CARD_MIN_WIDTH`-derived, so read the coordinates off a `capture-pane` first rather than computing them.
 
 ### Picker rendering in tmux [cheap]
 opentui paint bugs don't show up in a typecheck. `tmux new-session -d -s t -x 170 -y 48 -c G:\code\destedtui`, send `bun run src/index.tsx --projects`, then `tmux capture-pane -p -t t`.

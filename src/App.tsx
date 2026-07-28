@@ -43,12 +43,12 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
   };
 
   /** Picking a project ends the session: we exist only to hand a path back. */
-  const chooseProject = (dir: string) => {
+  const chooseProject = (dir: string, command?: string) => {
     recordProjectOpen(dir);
-    const handedOff = emitCd(dir);
+    const handedOff = emitCd(dir, command);
     killAll();
     renderer.destroy();
-    announceCd(dir, handedOff);
+    announceCd(dir, handedOff, command);
     process.exit(0);
   };
 

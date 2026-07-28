@@ -2,6 +2,10 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-07-28 — Card buttons run their command in YOUR shell, not inside the TUI
+**Why:** user asked for a `dev` button and a claude button (`claude --dangerously-skip-permissions`) inside each card. Both need a real interactive terminal — claude especially. So the handoff file grew a second line: line 1 is the directory, line 2 an optional command, and `proj` does `Set-Location` then `Invoke-Expression`. destedtui exits before anything runs, so the command owns the terminal completely. The dev command is derived per project (`<pm> run dev|start|serve`, pm from the lockfile) and the button is absent when there's no script.
+**Rejected:** running the command inside destedtui via `runScript`/ProcessView (a nested pty for an interactive agent — no); hardcoding `bun dev` (wrong for the pnpm/yarn projects); a fixed command list in config (per-project detection is free).
+
 ## 2026-07-28 — The picker is a card grid, and one click goes
 **Why:** user's call after seeing the list version — "bigger. cards, not list. i want to click and i want to click fast". So: a reflowing grid of 5-row cards (5 columns at 170 wide, 3 at 92), hover to highlight, **single click acts immediately** — no select-then-confirm, since a `cd` is cheap and reversible. Picking clears the screen and scrollback so you land on a clean terminal with one `➜ cd …` line.
 **Rejected:** list rows (what this replaced); double-click or click-then-enter (slow, and there's nothing to protect against); a detail pane (the card carries the info; live git is one status line under the grid).

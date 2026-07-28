@@ -38,7 +38,9 @@ Accent discipline: each screen owns one accent for its border title (`titleColor
 
 Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue→cyan + cwd right) → one rounded-border panel (`margin: 1, marginTop: 0, padding: 1`, `backgroundColor: T.panel`, titled ` lowercase name `) → `Footer` hint bar. The panel border turns `T.green`/`T.red` on terminal success/failure states.
 
-**Card grid** (projects): inside the panel, a one-line search row → a fixed-height grid of rounded cards → a one-line status row. Columns come from `floor((inner + gap) / (CARD_MIN_WIDTH + gap))` and the leftover is divided back into the card width, so the grid always fills the panel edge to edge and reflows from 5 columns to 3 on a narrow terminal. Card = 5 rows: `◈ name` + stack badge, a dim description line, then branch + age + open count. Selected card gets a `T.teal` border and `T.selectionBg` fill.
+**Card grid** (projects): inside the panel, a one-line search row → a fixed-height grid of rounded cards → a one-line status row. Columns come from `floor((inner + gap) / (CARD_MIN_WIDTH + gap))` and the leftover is divided back into the card width, so the grid always fills the panel edge to edge and reflows from 5 columns to 3 on a narrow terminal. Card = 6 rows: `◈ name` + stack badge, a dim description line, branch + age + open count, then a row of action buttons. Selected card gets a `T.teal` border and `T.selectionBg` fill.
+
+**Buttons** are a one-row `box` with `T.surfaceAlt` background and one cell of padding either side, label in the action's own colour (`▶ dev` green, `✦ claude` purple). A button inside a clickable parent must `stopPropagation()`, and every button needs a `ctrl+<key>` twin in the footer.
 
 **Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), and the footer advertises both.
 

@@ -7,6 +7,10 @@ Personal dev-project TUI. Open a terminal and it hands you your projects; `cd` i
 ### ◈ Projects
 A grid of cards, one per folder in your code root, ranked by how often you open it — git branch, how long since you last touched it, and a detected stack badge on each. **Click a card and you're there**: the TUI clears the screen and your shell is now in that directory. Type to filter, `tab` cycles sorting, arrows + `enter` if you'd rather not reach for the mouse. A status line under the grid shows live git state for whatever's highlighted: ahead/behind, uncommitted count, last commit.
 
+Each card also carries buttons — `▶ dev` (the project's own `dev`/`start` script, run with its package manager) and `✦ claude` (`claude --dangerously-skip-permissions`). They cd first, then run the command **in your shell**, so it gets a real interactive terminal. `ctrl+d` and `ctrl+k` do the same from the keyboard.
+
+Typing what you'd have typed at a prompt works too: `cd drydock`, `z dry`, or a pasted `g:\code\drydock\src` all filter to the right project — the part that isn't a name is dimmed and ignored.
+
 Ranking is frecency — your picks, seeded on first run from [zoxide](https://github.com/ajeetdsouza/zoxide)'s existing history if you have it, so the list is useful immediately.
 
 ```powershell

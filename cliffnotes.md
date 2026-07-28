@@ -44,7 +44,7 @@ src/
     Header.tsx          ascii-font "DESTED" gradient header + cwd
     Footer.tsx          keybind hint bar (Hint = [key, label])
     ListPicker.tsx      THE list primitive: windowed, keyboard+mouse, badges, disabled rows
-    ProjectCard.tsx     one project as a 5-row card (+ CARD_HEIGHT/CARD_MIN_WIDTH/STACK_COLORS)
+    ProjectCard.tsx     one project as a 6-row card + dev/claude buttons (CARD_HEIGHT, STACK_COLORS)
     ProgressBar.tsx     pct bar used by backup/restore/pull
   screens/
     MainMenu.tsx        utility tiles incl. disabled "coming soon" rows
@@ -80,6 +80,7 @@ src/
 | Card size / grid columns | `ProjectCard.tsx` (`CARD_HEIGHT`, `CARD_MIN_WIDTH`), geometry block in `Projects.tsx` |
 | Ignoring `cd `/paths typed into the filter | `src/lib/projects.ts` → `parseQuery`, `NAV_PREFIX` |
 | The picker's cd handoff | `src/lib/cd.ts` + `chooseProject` in `App.tsx` + `proj` in `shell/destedtui.ps1` |
+| What the card buttons run | `detectStack` → `devCommand` in `lib/projects.ts`; `CLAUDE_COMMAND` in `ProjectCard.tsx` |
 | When the picker auto-opens | `Test-DestedTuiAutostart` in `shell/destedtui.ps1` |
 | Projects root (default `g:\code`) | `projectsRoot()` — `DESTEDTUI_PROJECTS_ROOT` > config `projectsRoot` > platform default |
 | Colors / look | `src/theme.ts` (+ `ui.md`) |

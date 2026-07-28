@@ -12,11 +12,12 @@ const OFF = `${ESC}[0m`;
  * we write the chosen directory into it, and the wrapper `Set-Location`s there
  * once we've exited. No file set = we were run without the wrapper.
  */
-export function emitCd(dir: string): boolean {
+export function emitCd(dir: string, command?: string): boolean {
   const target = process.env.DESTEDTUI_CD_FILE;
   if (!target) return false;
   try {
-    writeFileSync(target, dir, "utf8");
+    // Line 1 = where to go, line 2 (optional) = what to run once we're there.
+    writeFileSync(target, command ? `${dir}\n${command}` : dir, "utf8");
     return true;
   } catch {
     return false;
@@ -28,9 +29,10 @@ export function emitCd(dir: string): boolean {
  * first so picking a project leaves a clean terminal with one confirmation
  * line, not the remains of the picker.
  */
-export function announceCd(dir: string, handedOff: boolean): void {
+export function announceCd(dir: string, handedOff: boolean, command?: string): void {
   process.stdout.write(`${ESC}[2J${ESC}[3J${ESC}[H`);
   process.stdout.write(`${CYAN}➜  cd ${dir}${OFF}\n`);
+  if (command) process.stdout.write(`${CYAN}➜  ${command}${OFF}\n`);
   if (!handedOff) {
     process.stdout.write(
       `${DIM}   (shell can't follow — run: destedtui --install-shell)${OFF}\n`,
