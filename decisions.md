@@ -2,6 +2,10 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-07-28 — The profile block goes at the TOP, and the profile timer lies
+**Why:** user reported "takes like 5 seconds to start, and i can't do anything until it's done", with PowerShell reporting a 6056ms profile load. Measured: launch → first frame is ~400ms (bun ~280 + opentui import 111 + scan 47 + renderer 10), and the profile alone is ~430ms warm. The 6s is PowerShell's timer still running while the picker waits for a click — it runs *inside* profile loading. Real fix: `install.ps1` now inserts the block immediately after any `using` statements instead of appending, so the picker paints before the profile's oh-my-posh/PSReadLine/module work rather than after it, and that work happens once you've picked.
+**Rejected:** deferring the launch to `PowerShell.OnIdle` like the profile's module loading (that fires while PSReadLine owns the console — a full-screen TUI would fight it for the terminal, and `Set-Location` from an event action isn't reliably the session's); `bun build --compile` to shave the ~280ms bun start (a build step on every edit, for a tool that's edited constantly).
+
 ## 2026-07-28 — Card buttons run their command in YOUR shell, not inside the TUI
 **Why:** user asked for a `dev` button and a claude button (`claude --dangerously-skip-permissions`) inside each card. Both need a real interactive terminal — claude especially. So the handoff file grew a second line: line 1 is the directory, line 2 an optional command, and `proj` does `Set-Location` then `Invoke-Expression`. destedtui exits before anything runs, so the command owns the terminal completely. The dev command is derived per project (`<pm> run dev|start|serve`, pm from the lockfile) and the button is absent when there's no script.
 **Rejected:** running the command inside destedtui via `runScript`/ProcessView (a nested pty for an interactive agent — no); hardcoding `bun dev` (wrong for the pnpm/yarn projects); a fixed command list in config (per-project detection is free).

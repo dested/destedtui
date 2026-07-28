@@ -80,6 +80,30 @@ A child process cannot change its parent's directory. So:
 Run without the wrapper and it still prints the path plus a hint to run
 `destedtui --install-shell`.
 
+## Where the block sits, and what "slow" means
+
+`install.ps1` puts the block **directly after any `using` statements**, near the
+top of the profile — not at the end. The picker owns the terminal until you
+choose, so anything the profile does before it is time you spend staring at
+nothing. Up top it paints in ~400ms and the rest of the profile runs once you've
+picked.
+
+Measured on this machine (warm):
+
+| Phase | Cost |
+| --- | --- |
+| bun start + module graph | ~280ms |
+| `@opentui/core` import | 111ms |
+| `scanProjects` (221 folders, incl. zoxide) | 47ms |
+| `createCliRenderer` | 10ms |
+| **launch → first painted frame** | **~400ms** |
+| the profile itself, without the picker | ~430ms warm / ~740ms cold |
+
+If PowerShell reports something like `Loading personal and system profiles took
+6056ms`, that is **not** startup cost: the picker runs inside profile loading,
+so PowerShell's timer keeps counting while the picker sits there waiting for you
+to click. The number is mostly your own dwell time.
+
 ## Auto-launch guard
 
 `Test-DestedTuiAutostart` in `shell/destedtui.ps1` fires **only** when: not

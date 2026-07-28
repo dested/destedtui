@@ -87,23 +87,32 @@ $block = @"
 $Begin
 # Project picker: ``proj`` (alias ``pj``) opens it, enter cds this shell there.
 # Also auto-launches when a shell starts in the projects root.
+#
+# Deliberately near the TOP of the profile: the picker takes over the terminal
+# until you choose, so everything above it is time you sit staring at nothing.
+# Up here it paints in ~400ms and the rest of the profile loads once you've
+# picked. It has to stay below any ``using`` statements, which PowerShell
+# requires to be the first statements in the file.
+#
 # Managed by: destedtui --install-shell   (remove: install.ps1 -Uninstall)
 if (Test-Path '$integration') { . '$integration' }
 $End
 "@
 
-if ($PSCmdlet.ShouldProcess($profilePath, $(if ($had) { 'refresh destedtui block' } else { 'add destedtui block' }))) {
-    if ($had) {
-        # Only a refresh has to rewrite the file; a first install appends so a
-        # long hand-maintained profile is never round-tripped through here.
-        $content = $stripped.TrimEnd()
-        if ($content) { $content += "`r`n`r`n" }
-        Set-Content -LiteralPath $profilePath -Value ($content + $block) -Encoding UTF8
-        Write-Ok "block refreshed"
-    } else {
-        Add-Content -LiteralPath $profilePath -Value ("`r`n" + $block) -Encoding UTF8
-        Write-Ok "block added"
-    }
+# Insert after the last `using` statement (PowerShell rejects anything before
+# them), otherwise at the very top.
+$lines = $stripped -split "`r?`n"
+$insertAt = 0
+for ($i = 0; $i -lt $lines.Count; $i++) {
+    if ($lines[$i] -match '^\s*using\s+(namespace|module|assembly)\s') { $insertAt = $i + 1 }
+}
+
+if ($PSCmdlet.ShouldProcess($profilePath, $(if ($had) { 'move destedtui block to the top' } else { 'add destedtui block' }))) {
+    $head = if ($insertAt -gt 0) { $lines[0..($insertAt - 1)] } else { @() }
+    $tail = if ($insertAt -lt $lines.Count) { $lines[$insertAt..($lines.Count - 1)] } else { @() }
+    $out = @($head) + @('') + @($block -split "`r?`n") + @($tail)
+    Set-Content -LiteralPath $profilePath -Value ($out -join "`r`n").TrimEnd() -Encoding UTF8
+    Write-Ok $(if ($had) { "block moved to line $($insertAt + 2)" } else { "block added at line $($insertAt + 2)" })
 }
 
 Write-Host ""
