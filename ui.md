@@ -30,12 +30,25 @@
 | `T.yellow` | `#e0af68` | running status |
 | `T.orange` | `#ff9e64` | restore accent, stderr lines |
 | `T.cyan` | `#7dcfff` | key hints, icons, process title |
+| `T.teal` | `#73daca` | projects accent (title, active filter border, sort mode) |
 
-Accent discipline: each screen owns one accent for its border title (`titleColor`) — menu purple, scripts green, backup blue, restore orange, process cyan. Status colors are earned by state, never used for decoration.
+Accent discipline: each screen owns one accent for its border title (`titleColor`) — menu purple, projects teal, scripts green, backup blue, restore orange, process cyan. Status colors are earned by state, never used for decoration.
 
 ## Layout
 
 Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue→cyan + cwd right) → one rounded-border panel (`margin: 1, marginTop: 0, padding: 1`, `backgroundColor: T.panel`, titled ` lowercase name `) → `Footer` hint bar. The panel border turns `T.green`/`T.red` on terminal success/failure states.
+
+**Card grid** (projects): inside the panel, a one-line search row → a fixed-height grid of rounded cards → a one-line status row. Columns come from `floor((inner + gap) / (CARD_MIN_WIDTH + gap))` and the leftover is divided back into the card width, so the grid always fills the panel edge to edge and reflows from 5 columns to 3 on a narrow terminal. Card = 5 rows: `◈ name` + stack badge, a dim description line, then branch + age + open count. Selected card gets a `T.teal` border and `T.selectionBg` fill.
+
+**Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), and the footer advertises both.
+
+## Painting (learned the hard way)
+
+A box paints only the rect it occupies; opentui does not clear what a shrinking or moving element vacates. So:
+
+- **Give anything variably-sized an explicit width/height.** A `flexGrow` column sizes to its content, so a filter that shortens the longest row slides the neighbouring pane sideways and leaves a copy of it behind.
+- **Fill the first frame.** Populate lists in `useState(() => …)`, not an effect, and seed the highlighted selection — an empty first frame paints torn rows that never repaint.
+- **Budget `visible + 2` rows** for a `ListPicker` (the `▲/▼ N more` counters are extra lines), or the counter draws on top of a row.
 
 ## Components
 
@@ -44,9 +57,10 @@ Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue�
 | `Header` | `src/components/Header.tsx` | brand row; takes `subtitle` (cwd) |
 | `Footer` | `src/components/Footer.tsx` | hint bar; `hints: [key, label][]`, key in cyan, label dim |
 | `ListPicker` | `src/components/ListPicker.tsx` | ALL lists: `❯` caret, icon, title, dim subtitle, right badge, disabled rows, windowing with `▲/▼ N more`, mouse click |
+| `ProjectCard` | `src/components/ProjectCard.tsx` | one grid cell; every line padded to the card's inner width |
 | `ProgressBar` | `src/components/ProgressBar.tsx` | flat block bar + dim percent |
 
-Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ⛁ ↺ ⎇ ⚡ ☰ ✕ ◈ ⚠ ＋).
+Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ⛁ ↺ ⎇ ⚡ ☰ ✕ ◈ ◇ ▣ ◷ ↻ ⌂ ⚠ ＋). Project rows: `◈` git repo, `◇` plain folder; the badge is the detected stack, coloured per language.
 
 ## States
 
@@ -66,4 +80,5 @@ Lowercase panel titles (` pg backup `). Hints terse and lowercase ("kill & back"
 - ❌ A screen without a `Footer` — every screen advertises its keys.
 - ❌ More than one accent per screen title / rainbow event logs.
 - ❌ Blocking the first paint — heavy work happens after mount, behind a spinner.
-- ❌ Emoji icons — single-cell unicode glyphs only (emoji are double-width and misalign columns).
+- ❌ Emoji icons — single-cell unicode glyphs only (emoji are double-width and misalign columns; the menu's `🖳` proved it and was replaced with `⌂`).
+- ❌ Content-sized boxes anywhere the content changes — see Painting.

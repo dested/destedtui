@@ -1,11 +1,6 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import type { PgConn } from "./pgurl.ts";
 import { adminQuery, adminRows } from "./pgtools.ts";
-
-const CONFIG_DIR = join(homedir(), ".destedtui");
-const CONFIG_PATH = join(CONFIG_DIR, "config.json");
+import { readConfig, patchConfig } from "./config.ts";
 
 export interface LocalConn {
   host: string;
@@ -27,34 +22,21 @@ export function defaultLocalConn(): LocalConn {
 /** Load the saved localhost connection preset, falling back to defaults. */
 export function loadLocalConn(): LocalConn {
   const def = defaultLocalConn();
-  try {
-    const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
-    const l = raw?.localhost;
-    if (l && typeof l === "object") {
-      return {
-        host: typeof l.host === "string" && l.host ? l.host : def.host,
-        port: Number.isFinite(l.port) ? l.port : def.port,
-        user: typeof l.user === "string" && l.user ? l.user : def.user,
-        password: typeof l.password === "string" ? l.password : def.password,
-      };
-    }
-  } catch {
-    /* no config yet or unreadable — use defaults */
+  const l = readConfig().localhost;
+  if (l && typeof l === "object") {
+    return {
+      host: typeof l.host === "string" && l.host ? l.host : def.host,
+      port: Number.isFinite(l.port) ? l.port : def.port,
+      user: typeof l.user === "string" && l.user ? l.user : def.user,
+      password: typeof l.password === "string" ? l.password : def.password,
+    };
   }
   return def;
 }
 
 /** Persist the localhost connection preset to ~/.destedtui/config.json. */
 export function saveLocalConn(conn: LocalConn): void {
-  let existing: Record<string, unknown> = {};
-  try {
-    existing = JSON.parse(readFileSync(CONFIG_PATH, "utf8")) ?? {};
-  } catch {
-    /* start fresh */
-  }
-  existing.localhost = conn;
-  mkdirSync(CONFIG_DIR, { recursive: true });
-  writeFileSync(CONFIG_PATH, JSON.stringify(existing, null, 2));
+  patchConfig({ localhost: conn });
 }
 
 /** Build a full PgConn (with URL) for a given database on the local server. */

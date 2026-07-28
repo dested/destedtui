@@ -12,12 +12,19 @@ import { Backup } from "./screens/Backup.tsx";
 import { Restore } from "./screens/Restore.tsx";
 import { LocalDb } from "./screens/LocalDb.tsx";
 import { Pull } from "./screens/Pull.tsx";
+import { Projects } from "./screens/Projects.tsx";
+import { projectsRoot, recordProjectOpen } from "./lib/projects.ts";
+import { announceCd, emitCd } from "./lib/cd.ts";
 
 export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string }) {
   const renderer = useRenderer();
-  const [stack, setStack] = useState<Route[]>(
-    initialRoute.name === "menu" ? [{ name: "menu" }] : [{ name: "menu" }, initialRoute],
-  );
+  const [stack, setStack] = useState<Route[]>(() => {
+    if (initialRoute.name === "menu") return [{ name: "menu" }];
+    // The project picker launched from the shell is the whole app — nothing to
+    // go "back" to, so esc must quit rather than drop you in the menu.
+    if (initialRoute.name === "projects") return [initialRoute];
+    return [{ name: "menu" }, initialRoute];
+  });
   const [discovery, setDiscovery] = useState<Discovery | null>(null);
 
   useEffect(() => {
@@ -32,6 +39,16 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
   const quit = () => {
     killAll();
     renderer.destroy();
+    process.exit(0);
+  };
+
+  /** Picking a project ends the session: we exist only to hand a path back. */
+  const chooseProject = (dir: string) => {
+    recordProjectOpen(dir);
+    const handedOff = emitCd(dir);
+    killAll();
+    renderer.destroy();
+    announceCd(dir, handedOff);
     process.exit(0);
   };
 
@@ -51,6 +68,9 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
       {route.name === "restore" && discovery && <Restore discovery={discovery} back={back} preset={route.preset} />}
       {route.name === "localdb" && <LocalDb go={go} back={back} />}
       {route.name === "pull" && discovery && <Pull discovery={discovery} back={back} />}
+      {route.name === "projects" && (
+        <Projects root={projectsRoot()} choose={chooseProject} leave={stack.length > 1 ? back : quit} />
+      )}
       {(route.name === "scripts" || route.name === "backup" || route.name === "restore" || route.name === "pull") && !discovery && (
         <box style={{ padding: 2 }}>
           <text fg={T.dim}>scanning project...</text>

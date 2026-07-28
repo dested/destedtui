@@ -9,6 +9,7 @@
 | --- | --- | --- |
 | Type-check | `bun x tsc --noEmit` | [cheap] |
 | CLI plumbing | `bun run src/index.tsx --help` / `--version` | [cheap] |
+| Shell integration installed | `Get-Command proj` in a new shell; `install.ps1 -WhatIf` shows the resolved profile | [cheap] |
 | Boot without crash | run `destedtui` in a real terminal, see menu render, `q` quits | [cheap] |
 | Global bin intact | `destedtui --version` from another directory | [cheap] |
 
@@ -19,6 +20,20 @@ No unit-test runner. Core-logic smoke and full e2e are ad-hoc scripts (patterns 
 Postgres credentials come from whatever project `.env` you point it at — never stored in this repo. For e2e, local dev DBs exist in `G:\code\changehowilook\.env` and `G:\code\beep-demo\web\.env` (localhost:5432; server is PostgreSQL 18.x as of 2026-07).
 
 ## Critical flows
+
+### Project picker [cheap]
+Touchpoints: `src/lib/projects.ts`, `src/screens/Projects.tsx`, `src/lib/cd.ts`
+1. Scratch script: `scanProjects(projectsRoot())` → expect ~220 rows, scan under ~100ms, branches populated, `inspectProject` on a known repo returning branch/dirty/last-commit.
+2. In a **real** terminal: `proj`, click a card (or type a name + enter) → screen clears, the shell is now in that folder and printed `➜  cd …`; `~/.destedtui/config.json` gained a `projectOpens` entry and that project floats up the grid next time.
+3. `esc` with a filter typed clears the filter; `esc` again closes and the shell stays put.
+
+### Picker rendering in tmux [cheap]
+opentui paint bugs don't show up in a typecheck. `tmux new-session -d -s t -x 170 -y 48 -c G:\code\destedtui`, send `bun run src/index.tsx --projects`, then `tmux capture-pane -p -t t`.
+Look for: full rows of cards with the last column flush against the panel edge, no half-drawn card borders after typing a filter that shrinks the grid, the status line present. Then repeat at `-x 92` — it should reflow 5 columns → 3, not clip.
+Caveat: capture-pane under psmux drops cells, so *some* raggedness is the capture, not the app — the pre-existing menu screen shows it too. Trust the structural checks above, not exact column alignment.
+
+### Autostart guard [cheap]
+It cannot fire inside an agent shell (`CLAUDECODE` is set and the host launches pwsh with `-Command` — both deliberate refusals). Test the predicate directly instead: dot-source `shell/destedtui.ps1` with the trailing `if (Test-DestedTuiAutostart) { proj }` line stripped, then call `Test-DestedTuiAutostart -CommandLine @('…pwsh.dll') -Location 'G:\code'` (expect `True`) versus a project subfolder, an unrelated path, and `-Command`/`-File` argument lists (expect `False`).
 
 ### Script runner [cheap]
 Touchpoints: `src/lib/discovery.ts`, `src/lib/run.ts`, `src/screens/Scripts.tsx`, `src/screens/ProcessView.tsx`

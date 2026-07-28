@@ -8,4 +8,5 @@ export type Route =
   | { name: "backup"; presetUrl?: string; presetLabel?: string }
   | { name: "restore"; preset?: { url: string; mode: RestoreMode; label: string } }
   | { name: "localdb" }
-  | { name: "pull" };
+  | { name: "pull" }
+  | { name: "projects" };

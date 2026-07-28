@@ -3,6 +3,7 @@ import { T } from "../theme.ts";
 import { ListPicker, type ListItem } from "../components/ListPicker.tsx";
 import { Footer } from "../components/Footer.tsx";
 import type { Discovery } from "../lib/discovery.ts";
+import { projectsRoot } from "../lib/projects.ts";
 import type { Route } from "../routes.ts";
 
 interface Props {
@@ -21,6 +22,14 @@ export function MainMenu({ discovery, go, quit }: Props) {
   });
 
   const items: ListItem[] = [
+    {
+      id: "projects",
+      icon: "◈",
+      title: "Projects",
+      subtitle: "jump to any project — closes the tui and cds there",
+      badge: projectsRoot(),
+      badgeColor: T.teal,
+    },
     {
       id: "scripts",
       icon: "▶",
@@ -48,7 +57,7 @@ export function MainMenu({ discovery, go, quit }: Props) {
     },
     {
       id: "localdb",
-      icon: "🖳",
+      icon: "⌂",
       title: "Local Postgres",
       subtitle: "browse localhost DBs — create, drop, back up, restore into",
       badge: "localhost",
@@ -91,7 +100,8 @@ export function MainMenu({ discovery, go, quit }: Props) {
           vimKeys
           visible={14}
           onSelect={(item) => {
-            if (item.id === "scripts") go({ name: "scripts" });
+            if (item.id === "projects") go({ name: "projects" });
+            else if (item.id === "scripts") go({ name: "scripts" });
             else if (item.id === "backup") go({ name: "backup" });
             else if (item.id === "restore") go({ name: "restore" });
             else if (item.id === "localdb") go({ name: "localdb" });
