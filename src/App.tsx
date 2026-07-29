@@ -28,10 +28,18 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
   const [discovery, setDiscovery] = useState<Discovery | null>(null);
 
   useEffect(() => {
-    // discovery is sync fs-walking; defer a tick so first paint happens instantly
-    const t = setTimeout(() => setDiscovery(discover(cwd)), 10);
-    return () => clearTimeout(t);
-  }, [cwd]);
+    // The shell-launched picker never leaves the projects screen, so scanning
+    // the cwd for scripts/databases there is wasted work (it used to freeze
+    // the freshly painted UI for seconds on a big directory).
+    if (initialRoute.name === "projects") return;
+    let stale = false;
+    discover(cwd).then((d) => {
+      if (!stale) setDiscovery(d);
+    });
+    return () => {
+      stale = true;
+    };
+  }, [cwd, initialRoute.name]);
 
   const route = stack[stack.length - 1] ?? { name: "menu" as const };
   const go = (r: Route) => setStack((s) => [...s, r]);

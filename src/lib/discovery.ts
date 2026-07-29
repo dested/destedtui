@@ -1,4 +1,5 @@
-import { readdirSync, readFileSync, statSync, existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
+import { readdir, readFile } from "node:fs/promises";
 import { join, basename, relative } from "node:path";
 
 export type PackageManager = "bun" | "pnpm" | "yarn" | "npm";
@@ -111,33 +112,42 @@ function isEnvFile(name: string): boolean {
   return true;
 }
 
-/** Walk the tree from root, collecting package.json scripts and .env DATABASE_URLs. */
-export function discover(root: string, maxDepth = 4): Discovery {
+/**
+ * Walk the tree from root, collecting package.json scripts and .env DATABASE_URLs.
+ * Async on purpose: each readdir yields to the event loop, so a big tree slows
+ * discovery down but never freezes the UI. Dirents skip the per-file stat that
+ * made the old sync walk take seconds on Windows.
+ */
+export async function discover(root: string, maxDepth = 4): Promise<Discovery> {
   const packages: PackageInfo[] = [];
   const databases: DatabaseInfo[] = [];
 
-  const walk = (dir: string, depth: number) => {
-    let entries: string[];
+  const walk = async (dir: string, depth: number): Promise<void> => {
+    let entries;
     try {
-      entries = readdirSync(dir);
+      entries = await readdir(dir, { withFileTypes: true });
     } catch {
       return;
     }
     for (const entry of entries) {
-      const full = join(dir, entry);
-      let st;
-      try {
-        st = statSync(full);
-      } catch {
-        continue;
-      }
-      if (st.isDirectory()) {
-        if (depth < maxDepth && !SKIP_DIRS.has(entry) && !entry.startsWith(".")) walk(full, depth + 1);
-        continue;
-      }
-      if (entry === "package.json") {
+      const name = entry.name;
+      const full = join(dir, name);
+      let isDir = entry.isDirectory();
+      if (!isDir && entry.isSymbolicLink()) {
+        // Junctions/symlinks show up as links; one stat resolves what they are.
         try {
-          const pkg = JSON.parse(readFileSync(full, "utf8"));
+          isDir = statSync(full).isDirectory();
+        } catch {
+          continue;
+        }
+      }
+      if (isDir) {
+        if (depth < maxDepth && !SKIP_DIRS.has(name) && !name.startsWith(".")) await walk(full, depth + 1);
+        continue;
+      }
+      if (name === "package.json") {
+        try {
+          const pkg = JSON.parse(await readFile(full, "utf8"));
           const scripts: Record<string, string> =
             pkg && typeof pkg.scripts === "object" && pkg.scripts ? pkg.scripts : {};
           if (Object.keys(scripts).length > 0) {
@@ -153,9 +163,9 @@ export function discover(root: string, maxDepth = 4): Discovery {
         } catch {
           // unparseable package.json — skip
         }
-      } else if (isEnvFile(entry)) {
+      } else if (isEnvFile(name)) {
         try {
-          const env = parseEnv(readFileSync(full, "utf8"));
+          const env = parseEnv(await readFile(full, "utf8"));
           for (const key of DB_URL_KEYS) {
             const url = env[key];
             if (url && /^postgres(ql)?:\/\//i.test(url)) {
@@ -171,7 +181,7 @@ export function discover(root: string, maxDepth = 4): Discovery {
     }
   };
 
-  walk(root, 0);
+  await walk(root, 0);
   packages.sort((a, b) => (a.rel === "." ? -1 : b.rel === "." ? 1 : a.rel.localeCompare(b.rel)));
   return { root, packages, databases };
 }
