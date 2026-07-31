@@ -5,11 +5,16 @@ import { join } from "node:path";
 export const CONFIG_DIR = join(homedir(), ".destedtui");
 export const CONFIG_PATH = join(CONFIG_DIR, "config.json");
 
+/** Narrow anything JSON-shaped to a plain object we can read keys off. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
 /** Whole config object, or {} when there is no config yet / it's unreadable. */
-export function readConfig(): Record<string, any> {
+export function readConfig(): Record<string, unknown> {
   try {
-    const raw = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
-    return raw && typeof raw === "object" ? raw : {};
+    const raw: unknown = JSON.parse(readFileSync(CONFIG_PATH, "utf8"));
+    return isRecord(raw) ? raw : {};
   } catch {
     return {};
   }

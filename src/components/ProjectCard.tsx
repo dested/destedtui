@@ -1,5 +1,7 @@
 import { T } from "../theme.ts";
 import { fmtAgo, type ProjectInfo } from "../lib/projects.ts";
+import { pad } from "../lib/text.ts";
+import { Highlighted } from "./Highlight.tsx";
 
 export const CARD_HEIGHT = 6;
 
@@ -34,20 +36,8 @@ export const STACK_COLORS: Record<string, string> = {
   web: T.blue,
 };
 
-/** Hard-truncate to n cells — cards are fixed width, so nothing may overflow. */
-function fit(s: string, n: number): string {
-  if (n <= 0) return "";
-  return s.length <= n ? s : `${s.slice(0, Math.max(0, n - 1))}…`;
-}
-
-/** Pad to exactly n cells so the row's right-hand column never drifts. */
-function pad(s: string, n: number): string {
-  const t = fit(s, n);
-  return t + " ".repeat(Math.max(0, n - t.length));
-}
-
 /** A click target inside a card. Stops propagation so the card doesn't also fire. */
-function Button({
+export function Button({
   label,
   color,
   onPress,
@@ -79,13 +69,15 @@ interface Props {
   project: ProjectInfo;
   width: number;
   selected: boolean;
+  /** Characters of the name the filter matched, for highlighting. */
+  positions: number[];
   onHover: () => void;
   onClick: () => void;
   /** Run a command in the project after cd-ing there. */
   onRun: (command: string) => void;
 }
 
-export function ProjectCard({ project, width, selected, onHover, onClick, onRun }: Props) {
+export function ProjectCard({ project, width, selected, positions, onHover, onClick, onRun }: Props) {
   const inner = width - 4; // border 2 + padding 2
   const stack = project.stack;
   const stackColor = STACK_COLORS[stack] ?? T.dim;
@@ -93,7 +85,6 @@ export function ProjectCard({ project, width, selected, onHover, onClick, onRun 
   // Every line is padded to `inner` so the two colour runs can't shift when the
   // text length changes — a card is a fixed rect and must always fill it.
   const nameWidth = Math.max(1, inner - 2 - (stack ? stack.length + 1 : 0));
-  const name = pad(project.name, nameWidth);
   const sub = project.pkgName ? `pkg: ${project.pkgName}` : project.description;
   const age = fmtAgo(project.mtime);
   const opens = project.opens > 0 ? ` · ${project.opens}×` : "";
@@ -119,7 +110,7 @@ export function ProjectCard({ project, width, selected, onHover, onClick, onRun 
     >
       <text>
         <span fg={selected ? T.teal : T.dim}>{project.isGit ? "◈ " : "◇ "}</span>
-        <span fg={T.fg}>{name}</span>
+        <Highlighted text={project.name} width={nameWidth} positions={positions} match={T.teal} base={T.fg} />
         {stack ? <span fg={stackColor}>{` ${stack}`}</span> : null}
       </text>
       <text fg={T.dim}>{pad(sub, inner)}</text>

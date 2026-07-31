@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { readConfig, patchConfig } from "./config.ts";
+import { fuzzyMatch, type Match } from "./fuzzy.ts";
 
 export interface ProjectInfo {
   /** Absolute project directory */
@@ -266,6 +267,36 @@ export function scanProjects(root: string): ProjectInfo[] {
   }
 
   return projects;
+}
+
+/**
+ * Fuzzy score for one project, or null when it doesn't match at all. `positions`
+ * are indices in `name` (the only field the card highlights) and empty when the
+ * hit came from the pkg name or stack instead.
+ *
+ * The fuzzy scorer does the work (`frop` → `frozen-ropes`, `sps` →
+ * `salsPowerShellSetup`), but exact and prefix hits get a flat bump on top so
+ * muscle memory always beats a clever subsequence somewhere else in the list.
+ * pkg name and stack still match, weighted below the folder name.
+ */
+export function matchProject(project: ProjectInfo, q: string): Match | null {
+  if (!q) return { score: 0, positions: [] };
+
+  const name = fuzzyMatch(project.name, q);
+  const lower = project.name.toLowerCase();
+  const nameScore = name ? name.score + (lower === q ? 1000 : lower.startsWith(q) ? 400 : 0) : 0;
+
+  const weighted = (text: string | null, weight: number): number => {
+    if (!text) return 0;
+    const m = fuzzyMatch(text, q);
+    return m ? m.score * weight : 0;
+  };
+  const altScore = Math.max(weighted(project.pkgName, 0.7), weighted(project.stack, 0.45));
+
+  if (nameScore <= 0 && altScore <= 0) return null;
+  return nameScore >= altScore
+    ? { score: nameScore, positions: name?.positions ?? [] }
+    : { score: altScore, positions: [] };
 }
 
 export function sortProjects(projects: ProjectInfo[], mode: SortMode): ProjectInfo[] {

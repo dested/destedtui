@@ -1,6 +1,6 @@
 import type { PgConn } from "./pgurl.ts";
 import { adminQuery, adminRows } from "./pgtools.ts";
-import { readConfig, patchConfig } from "./config.ts";
+import { isRecord, readConfig, patchConfig } from "./config.ts";
 
 export interface LocalConn {
   host: string;
@@ -23,10 +23,10 @@ export function defaultLocalConn(): LocalConn {
 export function loadLocalConn(): LocalConn {
   const def = defaultLocalConn();
   const l = readConfig().localhost;
-  if (l && typeof l === "object") {
+  if (isRecord(l)) {
     return {
       host: typeof l.host === "string" && l.host ? l.host : def.host,
-      port: Number.isFinite(l.port) ? l.port : def.port,
+      port: typeof l.port === "number" && Number.isFinite(l.port) ? l.port : def.port,
       user: typeof l.user === "string" && l.user ? l.user : def.user,
       password: typeof l.password === "string" ? l.password : def.password,
     };

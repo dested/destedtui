@@ -40,6 +40,12 @@ Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue�
 
 **Card grid** (projects): inside the panel, a one-line search row → a fixed-height grid of rounded cards → a one-line status row. Columns come from `floor((inner + gap) / (CARD_MIN_WIDTH + gap))` and the leftover is divided back into the card width, so the grid always fills the panel edge to edge and reflows from 5 columns to 3 on a narrow terminal. Card = 6 rows: `◈ name` + stack badge, a dim description line, branch + age + open count, then a row of action buttons. Selected card gets a `T.teal` border and `T.selectionBg` fill.
 
+**Command cards** share the grid and the card rect exactly, so there is one caret and one set of keys: `▸ name` + a purple `cmd` badge, the command line dim underneath, `runs where your shell is`, then `▶ run` / `✎ edit` / `✕`. Purple border when selected (projects are teal) — the colour is the whole difference between "a place" and "a thing that runs".
+
+**Matched characters** in a card name are drawn in `T.teal` while the rest stays `T.fg`, so a fuzzy hit explains itself. Only the folder/command name highlights; a hit on the pkg name or stack highlights nothing rather than lying about where it matched.
+
+**Modal panels** (the add/edit form, the delete confirm) **replace the grid** — same rect, same explicit height — instead of floating over it. An overlay would leave the cards it covered painted underneath. Their fields are hand-rolled, not `<input>`s, for the same reason the search line is (below).
+
 **Buttons** are a one-row `box` with `T.surfaceAlt` background and one cell of padding either side, label in the action's own colour (`▶ dev` green, `✦ claude` purple). A button inside a clickable parent must `stopPropagation()`, and every button needs a `ctrl+<key>` twin in the footer.
 
 **Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), and the footer advertises both.
@@ -50,6 +56,7 @@ A box paints only the rect it occupies; opentui does not clear what a shrinking 
 
 - **Give anything variably-sized an explicit width/height.** A `flexGrow` column sizes to its content, so a filter that shortens the longest row slides the neighbouring pane sideways and leaves a copy of it behind.
 - **Fill the first frame.** Populate lists in `useState(() => …)`, not an effect, and seed the highlighted selection — an empty first frame paints torn rows that never repaint.
+- **A bordered box is border 2 + padding 2 + its lines.** Come up one row and the top line is clipped with no error at all.
 - **Budget `visible + 2` rows** for a `ListPicker` (the `▲/▼ N more` counters are extra lines), or the counter draws on top of a row.
 
 ## Components
@@ -60,9 +67,14 @@ A box paints only the rect it occupies; opentui does not clear what a shrinking 
 | `Footer` | `src/components/Footer.tsx` | hint bar; `hints: [key, label][]`, key in cyan, label dim |
 | `ListPicker` | `src/components/ListPicker.tsx` | ALL lists: `❯` caret, icon, title, dim subtitle, right badge, disabled rows, windowing with `▲/▼ N more`, mouse click |
 | `ProjectCard` | `src/components/ProjectCard.tsx` | one grid cell; every line padded to the card's inner width |
+| `CommandCard` | `src/components/CommandCard.tsx` | the same cell for a saved shortcut; purple, `▸` |
+| `CommandEditor` | `src/components/CommandEditor.tsx` | add/edit form and delete confirm; replace the grid |
+| `Highlighted` | `src/components/Highlight.tsx` | a padded line with matched characters in a second colour |
 | `ProgressBar` | `src/components/ProgressBar.tsx` | flat block bar + dim percent |
 
-Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ⛁ ↺ ⎇ ⚡ ☰ ✕ ◈ ◇ ▣ ◷ ↻ ⌂ ⚠ ＋). Project rows: `◈` git repo, `◇` plain folder; the badge is the detected stack, coloured per language.
+Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ▸ ⛁ ↺ ⎇ ☰ ✕ ✎ ◈ ◇ ▣ ◷ ↻ ⌂ ⚠). Project rows: `◈` git repo, `◇` plain folder; the badge is the detected stack, coloured per language. Command rows: `▸`.
+
+**Check the width before adding a glyph.** `⚡` and `＋` are double-width and push the rest of a fixed-width line off its right edge — `⚡` cost the command card its badge. If in doubt, render it in a card and count cells.
 
 ## States
 

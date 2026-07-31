@@ -33,9 +33,19 @@ export function announceCd(dir: string, handedOff: boolean, command?: string): v
   process.stdout.write(`${ESC}[2J${ESC}[3J${ESC}[H`);
   process.stdout.write(`${CYAN}➜  cd ${dir}${OFF}\n`);
   if (command) process.stdout.write(`${CYAN}➜  ${command}${OFF}\n`);
-  if (!handedOff) {
-    process.stdout.write(
-      `${DIM}   (shell can't follow — run: destedtui --install-shell)${OFF}\n`,
-    );
-  }
+  if (!handedOff) hint();
+}
+
+/**
+ * Same teardown for a command shortcut, minus the cd line: it runs where the
+ * shell already is, so printing a directory would just be noise.
+ */
+export function announceRun(command: string, handedOff: boolean): void {
+  process.stdout.write(`${ESC}[2J${ESC}[3J${ESC}[H`);
+  process.stdout.write(`${CYAN}➜  ${command}${OFF}\n`);
+  if (!handedOff) hint();
+}
+
+function hint(): void {
+  process.stdout.write(`${DIM}   (shell can't follow — run: destedtui --install-shell)${OFF}\n`);
 }

@@ -1,6 +1,6 @@
 # Feature — Project picker (`proj`)
 
-**Status:** done · shipped 2026-07-28
+**Status:** done · shipped 2026-07-28 · fuzzy filter + command shortcuts 2026-07-30
 
 ## What it does
 
@@ -20,9 +20,53 @@ a project menu.
 | Scripted | `destedtui --projects` (also `-p`, `--cd`) |
 
 Mouse: hover highlights, **single click goes** (no confirm step), wheel scrolls.
-Keys: type to filter · `↑↓←→` move · `enter` go · `tab` cycle sort (most used →
-last touched → name) · `esc` clears the filter, or leaves if it's empty ·
-`ctrl+u` clears · `home`/`end`/`pgup`/`pgdn`.
+Keys: type to filter · `↑↓←→` move · `enter` go/run · `tab` cycle sort (most used
+→ last touched → name) · `esc` clears the filter, or leaves if it's empty ·
+`ctrl+u` clears · `ctrl+n` new command · `home`/`end`/`pgup`/`pgdn`.
+
+### Fuzzy / camelCase filtering
+
+`lib/fuzzy.ts` is an fzf-style scorer: the query has to appear in order, and the
+score is built from where the characters land, not just that they're present.
+
+| You type | You get | Why |
+| --- | --- | --- |
+| `frop` | `frozenropes` | `f` at the head, `rop` as a run |
+| `sps` | `sals-powershell-setup` | every letter is a word start → acronym bonus |
+| `dtui` | `destedtui` | run of three after the head |
+| `pg` | `pg-backup` | prefix bump on top of the fuzzy score |
+
+Bonuses (constants at the top of `fuzzy.ts`): head 18, word start 12, camelCase
+hump / first digit 10, consecutive 8, every match 16; gaps cost −3 to open and
+−1 to widen; +10 per character when **every** match landed on a word start, which
+is what stops `sps` preferring `slopshow`. Trailing text is free, so a long name
+isn't punished for being long — ties fall through to frecency, as before.
+
+On top of that, `matchProject` adds +1000 for an exact name and +400 for a
+prefix, so muscle memory always beats a clever subsequence elsewhere in the list.
+The pkg name (×0.7) and stack (×0.45) still match, weighted under the folder
+name. Matched characters are drawn in teal on the card so a hit explains itself.
+
+### Command shortcuts
+
+Things you run all day, as cards in the same grid: type `cc`, press enter, and
+`bunx ccusage` runs **in the directory your shell is already in** — no cd, no
+frecency entry. They sort ahead of projects (a handful of them would otherwise
+drown in 220 folders) and an exactly-typed name wins outright.
+
+| Key | Does |
+| --- | --- |
+| `ctrl+n` | new shortcut — `name` / `command`, `tab` switches field, `enter` saves |
+| `ctrl+e` | edit the highlighted shortcut |
+| `ctrl+x` | delete it (`enter` confirms, `esc` keeps it) |
+
+Stored in `~/.destedtui/config.json` as `commands: [{ name, command }]`; a missing
+key seeds `cc → bunx ccusage`, an empty array means you deleted them all and is
+left alone. Names are normalised to lowercase-kebab so they're typeable in the
+filter. The form is hand-rolled rather than an `<input>` for the same reason the
+search line is, and every keystroke goes through a functional `setState` —
+several key events can arrive before React re-renders, and a value-form update
+keeps only the last character.
 
 ### Card buttons
 
@@ -124,5 +168,7 @@ that git itself rejects shows a red `⚠ .git is there but unreadable` — true 
 ## Files
 
 `src/screens/Projects.tsx` · `src/components/ProjectCard.tsx` ·
-`src/lib/projects.ts` · `src/lib/cd.ts` · `src/lib/config.ts` ·
-`shell/destedtui.ps1` · `shell/install.ps1`
+`src/components/CommandCard.tsx` · `src/components/CommandEditor.tsx` ·
+`src/components/Highlight.tsx` · `src/lib/projects.ts` · `src/lib/fuzzy.ts` ·
+`src/lib/commands.ts` · `src/lib/text.ts` · `src/lib/cd.ts` ·
+`src/lib/config.ts` · `shell/destedtui.ps1` · `shell/install.ps1`

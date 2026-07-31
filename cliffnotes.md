@@ -1,11 +1,11 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-07-28.
+> Last updated: 2026-07-30.
 
 ## What this is
 
-Personal dev-project TUI for dested. Two jobs: (1) a **project picker** that lists everything in `g:\code` ranked by how often you open it and `cd`s the shell there — it auto-launches in every new terminal that starts in `g:\code`; (2) `cd` into any project and run `destedtui` for per-project utilities — a monorepo-aware package.json script runner and Postgres backup/restore driven by `.env` `DATABASE_URL`s. The unusual part of the latter: pg client tools are auto-downloaded per server major version (EDB builds) so dumps are never version-mismatched.
+Personal dev-project TUI for dested. Two jobs: (1) a **project picker** that lists everything in `g:\code` ranked by how often you open it, fuzzy-filters it, carries your saved command shortcuts, and `cd`s the shell there — it auto-launches in every new terminal that starts in `g:\code`; (2) `cd` into any project and run `destedtui` for per-project utilities — a monorepo-aware package.json script runner and Postgres backup/restore driven by `.env` `DATABASE_URL`s. The unusual part of the latter: pg client tools are auto-downloaded per server major version (EDB builds) so dumps are never version-mismatched.
 
 ## Quick Reference
 
@@ -15,7 +15,7 @@ Personal dev-project TUI for dested. Two jobs: (1) a **project picker** that lis
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
 - **CLI flags:** `--projects`/`-p`/`--cd`, `--backup`, `--restore`, `--local`, `--pull` (jump straight to a screen), `--install-shell`, `--help`, `--version`
 - **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch)
-- **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, optional `projectsRoot`)
+- **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
 
 ## Stack
@@ -44,7 +44,10 @@ src/
     Header.tsx          ascii-font "DESTED" gradient header + cwd
     Footer.tsx          keybind hint bar (Hint = [key, label])
     ListPicker.tsx      THE list primitive: windowed, keyboard+mouse, badges, disabled rows
-    ProjectCard.tsx     one project as a 6-row card + dev/claude buttons (CARD_HEIGHT, STACK_COLORS)
+    ProjectCard.tsx     one project as a 6-row card + dev/claude buttons (CARD_HEIGHT, STACK_COLORS, Button)
+    CommandCard.tsx     a saved command shortcut in the same card rect: run / edit / delete
+    CommandEditor.tsx   add-edit form + delete confirm; they REPLACE the grid, never overlay it
+    Highlight.tsx       one padded line with the fuzzy-matched characters picked out
     ProgressBar.tsx     pct bar used by backup/restore/pull
   screens/
     MainMenu.tsx        utility tiles incl. disabled "coming soon" rows
@@ -56,7 +59,10 @@ src/
     LocalDb.tsx         localhost DB browser: list/create/drop + edit connection; launches backup/restore per DB
     Pull.tsx            pick .env db → name local target → dump+restore into localhost, one shot
   lib/
-    projects.ts         scan g:\code, stack detect, frecency (own opens + zoxide), inspectProject
+    projects.ts         scan g:\code, stack detect, frecency (own opens + zoxide), matchProject, inspectProject
+    fuzzy.ts            fzf-style scorer: subsequence + word-start/camelCase/acronym bonuses, match positions
+    commands.ts         saved command shortcuts (config `commands`), load/save/upsert/remove, matchCommand
+    text.ts             fit/pad — cell arithmetic every card line goes through
     cd.ts               DESTEDTUI_CD_FILE handoff + the "➜ cd <dir>" line printed after teardown
     config.ts           ~/.destedtui/config.json read/patch (shared by pglocal + projects)
     discovery.ts        walk tree: package.json scripts, .env DATABASE_URLs, PM detection
@@ -76,6 +82,9 @@ src/
 | --- | --- |
 | Add a new utility screen | `src/screens/`, route in `src/routes.ts`, wire in `src/App.tsx`, tile in `MainMenu.tsx` |
 | Which folders show in the picker / how they rank | `src/lib/projects.ts` (`scanProjects`, `SKIP`, `decay`, `zoxideScores`) |
+| How the filter matches (`frop` → `frozen-ropes`) | `src/lib/fuzzy.ts` (bonus constants at the top), `matchProject` in `lib/projects.ts` |
+| Command shortcuts (`cc` → `bunx ccusage`) | `src/lib/commands.ts` (+ `DEFAULTS`), cards in `CommandCard.tsx`, form in `CommandEditor.tsx` |
+| Where a shortcut runs | `runHere` in `App.tsx` — the shell's cwd, never a project dir |
 | Stack badge detection (next/rust/go/…) | `src/lib/projects.ts` → `detectStack`; colors in `ProjectCard.tsx` → `STACK_COLORS` |
 | Card size / grid columns | `ProjectCard.tsx` (`CARD_HEIGHT`, `CARD_MIN_WIDTH`), geometry block in `Projects.tsx` |
 | Ignoring `cd `/paths typed into the filter | `src/lib/projects.ts` → `parseQuery`, `NAV_PREFIX` |
@@ -126,6 +135,9 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Don't populate a list from an effect.** Scanning in `useState(() => ...)` (~50ms for 220 folders) beats an empty first frame, which paints torn rows.
 - A screen that needs **left/right** keys can't mount a focused `<input>` — the textarea eats them as cursor moves. `Projects.tsx` captures printable `key.sequence` itself instead; that's also why it has no enter-ownership problem.
 - `ListPicker` renders up to `visible` rows **plus** the `▲/▼ N more` counters — budget `visible + 2` lines or the counter lands on top of a row.
+- **Several key events can land before React re-renders.** Anything that accumulates keystrokes must use the updater form (`setX(v => v + ch)`); a value-form `setState` reads the same stale state for every key in the batch and keeps only the last character. Cost an hour in the command editor.
+- **Check a glyph's width before using it.** `⚡` is double-width and silently ate the `cmd` badge off the end of the command card. Single-cell glyphs only (see ui.md).
+- **A bordered box's height must budget border 2 + padding 2 + its lines.** One row short and the top line is clipped away entirely with no error (the delete confirm lost its `⚠` line at `height: 5`).
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 
 ## Status

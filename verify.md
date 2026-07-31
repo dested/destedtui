@@ -28,6 +28,13 @@ Touchpoints: `src/lib/projects.ts`, `src/screens/Projects.tsx`, `src/lib/cd.ts`
 3. `esc` with a filter typed clears the filter; `esc` again closes and the shell stays put.
 4. Card buttons: point `DESTEDTUI_CD_FILE` at a temp file, run `--projects`, click `▶ dev` / `✦ claude` / the card body, and read the file — expect `[dir, "<pm> run dev"]`, `[dir, "claude --dangerously-skip-permissions"]`, and `[dir]` respectively. Buttons that don't `stopPropagation` show up as a missing second line.
 
+### Fuzzy filter + command shortcuts [cheap]
+Touchpoints: `src/lib/fuzzy.ts`, `src/lib/commands.ts`, `src/screens/Projects.tsx`
+1. Scratch script over the real list: `matchProject` for `frop` → `frozenropes` first, `sps` → `sals-powershell-setup` first, `dtui` → `destedtui` first. A regression here usually means a bonus constant moved.
+2. In tmux (recipe below): `ctrl+n`, type a name, `tab`, type a command **fast** (`send-keys -l` sends them in one burst — that's the point, it reproduces batched key events), `enter`. Then read `~/.destedtui/config.json`: the whole string must be there, not just its last character.
+3. `ctrl+x` on that card → confirm box shows BOTH the `⚠ name — command` line and the hint line → `enter` → gone from config.json.
+4. Handoff: point `DESTEDTUI_CD_FILE` at a temp file, run `--projects`, type `cc`, `enter` → the file holds the **current** directory on line 1 and `bunx ccusage` on line 2, and no `projectOpens` entry was written.
+
 ### Driving the picker with a real mouse [cheap]
 tmux `send-keys -H` does NOT decode hex in this psmux build (it types the digits). Send the escape byte instead: `ESC=$(printf '\033'); tmux send-keys -t <s> -l "${ESC}[<0;COL;ROWM"` to press and `...m` to release; button 35 is motion, which is how you test hover. Cards are `CARD_MIN_WIDTH`-derived, so read the coordinates off a `capture-pane` first rather than computing them.
 

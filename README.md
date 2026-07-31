@@ -9,7 +9,9 @@ A grid of cards, one per folder in your code root, ranked by how often you open 
 
 Each card also carries buttons — `▶ dev` (the project's own `dev`/`start` script, run with its package manager) and `✦ claude` (`claude --dangerously-skip-permissions`). They cd first, then run the command **in your shell**, so it gets a real interactive terminal. `ctrl+d` and `ctrl+k` do the same from the keyboard.
 
-Typing what you'd have typed at a prompt works too: `cd drydock`, `z dry`, or a pasted `g:\code\drydock\src` all filter to the right project — the part that isn't a name is dimmed and ignored.
+The filter is fuzzy and knows about word boundaries: `frop` finds `frozen-ropes`, `sps` finds `sals-powershell-setup`, `dtui` finds `destedtui` — matched characters are picked out on the card so you can see why it hit. Typing what you'd have typed at a prompt works too: `cd drydock`, `z dry`, or a pasted `g:\code\drydock\src` all filter to the right project — the part that isn't a name is dimmed and ignored.
+
+**Command shortcuts** share the grid: type `cc`, press enter, and `bunx ccusage` runs in the directory your shell is already in. `ctrl+n` adds one, `ctrl+e` edits, `ctrl+x` deletes; they live in `~/.destedtui/config.json`.
 
 Ranking is frecency — your picks, seeded on first run from [zoxide](https://github.com/ajeetdsouza/zoxide)'s existing history if you have it, so the list is useful immediately.
 
