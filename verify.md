@@ -12,6 +12,7 @@
 | Shell integration installed | `Get-Command proj` in a new shell; `install.ps1 -WhatIf` shows the resolved profile | [cheap] |
 | Boot without crash | run `destedtui` in a real terminal, see menu render, `q` quits | [cheap] |
 | Global bin intact | `destedtui --version` from another directory | [cheap] |
+| Review bin intact | `review --help` from any repo; `review --dry-run` prints the assembled prompt | [cheap] |
 
 No unit-test runner. Core-logic smoke and full e2e are ad-hoc scripts (patterns below).
 
@@ -50,6 +51,12 @@ It cannot fire inside an agent shell (`CLAUDECODE` is set and the host launches 
 Touchpoints: `src/lib/discovery.ts`, `src/lib/run.ts`, `src/screens/Scripts.tsx`, `src/screens/ProcessView.tsx`
 1. In this repo run `destedtui` → Scripts → filter "typecheck" → enter
 2. Expect live output, then green `✓ done`; esc twice back to menu
+
+### Review [cheap → heavy]
+Touchpoints: `src/review.tsx`, `src/screens/Review.tsx`, `src/lib/review*.ts`, `prompts/`
+1. [cheap] `review --help` exits 0; `review --dry-run` prints the prompt with the uncommitted scope block; `review --last 2 --dry-run` names the right base commit; `review --branch` on main exits 2 with "already on".
+2. [cheap] In tmux: `review` in a dirty repo → picker renders with live badges (`N files`, `HEAD`, "gh unavailable" when gh is absent); esc quits clean.
+3. [heavy — ask first] `review --headless` in a repo with real changes — spawns a paid `claude-opus-4-8` run (2–10 min, ~$1+). Expect streaming `· Tool arg` lines, a report, exit 0/1 matching the findings.
 
 ### Core-logic smoke (no DB needed) [medium]
 Touchpoints: `src/lib/discovery.ts`, `pgurl.ts`, `zip.ts`

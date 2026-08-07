@@ -31,12 +31,13 @@
 | `T.orange` | `#ff9e64` | restore accent, stderr lines |
 | `T.cyan` | `#7dcfff` | key hints, icons, process title |
 | `T.teal` | `#73daca` | projects accent (title, active filter border, sort mode) |
+| `T.pink` | `#ff007c` | review accent (Tokyo Night magenta) |
 
-Accent discipline: each screen owns one accent for its border title (`titleColor`) — menu purple, projects teal, scripts green, backup blue, restore orange, process cyan. Status colors are earned by state, never used for decoration.
+Accent discipline: each screen owns one accent for its border title (`titleColor`) — menu purple, projects teal, scripts green, backup blue, restore orange, process cyan, review pink. Status colors are earned by state, never used for decoration.
 
 ## Layout
 
-Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue→cyan + cwd right) → one rounded-border panel (`margin: 1, marginTop: 0, padding: 1`, `backgroundColor: T.panel`, titled ` lowercase name `) → `Footer` hint bar. The panel border turns `T.green`/`T.red` on terminal success/failure states.
+Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue→cyan; on the right, the cwd with its **leaf folder loud** — bright `T.teal` + bold behind a `⌂` glyph, parent path dim — because "which project am I in" is the question the header answers) → one rounded-border panel (`margin: 1, marginTop: 0, padding: 1`, `backgroundColor: T.panel`, titled ` lowercase name `) → `Footer` hint bar. The panel border turns `T.green`/`T.red` on terminal success/failure states.
 
 **Card grid** (projects): inside the panel, a one-line search row → a fixed-height grid of rounded cards → a one-line status row. Columns come from `floor((inner + gap) / (CARD_MIN_WIDTH + gap))` and the leftover is divided back into the card width, so the grid always fills the panel edge to edge and reflows from 5 columns to 3 on a narrow terminal. Card = 6 rows: `◈ name` + stack badge, a dim description line, branch + age + open count, then a row of action buttons. Selected card gets a `T.teal` border and `T.selectionBg` fill.
 
@@ -47,6 +48,8 @@ Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue�
 **Modal panels** (the add/edit form, the delete confirm) **replace the grid** — same rect, same explicit height — instead of floating over it. An overlay would leave the cards it covered painted underneath. Their fields are hand-rolled, not `<input>`s, for the same reason the search line is (below).
 
 **Buttons** are a one-row `box` with `T.surfaceAlt` background and one cell of padding either side, label in the action's own colour (`▶ dev` green, `✦ claude` purple). A button inside a clickable parent must `stopPropagation()`, and every button needs a `ctrl+<key>` twin in the footer.
+
+**The terminal pane** (`Term.tsx`) carries a one-line **note strip** just under its status row and above the emulator: `✎ note: <text>` (blue icon, `note:` dim, text `T.fg`), or a dim `✎ press t for a note` when empty, or the live draft with a `▏` caret in `T.yellow` while editing. It's a fixed height-1 row so it never reflows the terminal grid.
 
 **Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), and the footer advertises both.
 
@@ -63,7 +66,7 @@ A box paints only the rect it occupies; opentui does not clear what a shrinking 
 
 | Component | File | Purpose |
 | --- | --- | --- |
-| `Header` | `src/components/Header.tsx` | brand row; takes `subtitle` (cwd) |
+| `Header` | `src/components/Header.tsx` | brand row; takes `subtitle` (cwd) — splits it and paints the leaf folder bold-teal behind `⌂`, parent dim |
 | `Footer` | `src/components/Footer.tsx` | hint bar; `hints: [key, label][]`, key in cyan, label dim |
 | `ListPicker` | `src/components/ListPicker.tsx` | ALL lists: `❯` caret, icon, title, dim subtitle, right badge, disabled rows, windowing with `▲/▼ N more`, mouse click |
 | `ProjectCard` | `src/components/ProjectCard.tsx` | one grid cell; every line padded to the card's inner width |
@@ -74,7 +77,7 @@ A box paints only the rect it occupies; opentui does not clear what a shrinking 
 
 Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ▸ ⛁ ↺ ⎇ ☰ ✕ ✎ ◈ ◇ ▣ ◷ ↻ ⌂ ⚠). Project rows: `◈` git repo, `◇` plain folder; the badge is the detected stack, coloured per language. Command rows: `▸`.
 
-**Check the width before adding a glyph.** `⚡` and `＋` are double-width and push the rest of a fixed-width line off its right edge — `⚡` cost the command card its badge. If in doubt, render it in a card and count cells.
+**Check the width before adding a glyph.** `⚡` and `＋` are double-width and push the rest of a fixed-width line off its right edge — `⚡` cost the command card its badge; `☰` measured two cells in the review picker and shoved the badge column (use `≡`). If in doubt, render it in a card and count cells.
 
 ## States
 

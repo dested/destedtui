@@ -12,7 +12,10 @@ import { Backup } from "./screens/Backup.tsx";
 import { Restore } from "./screens/Restore.tsx";
 import { LocalDb } from "./screens/LocalDb.tsx";
 import { Pull } from "./screens/Pull.tsx";
+import { Startup } from "./screens/Startup.tsx";
+import { Term } from "./screens/Term.tsx";
 import { Projects } from "./screens/Projects.tsx";
+import { Review } from "./screens/Review.tsx";
 import { projectsRoot, recordProjectOpen } from "./lib/projects.ts";
 import { announceCd, announceRun, emitCd } from "./lib/cd.ts";
 
@@ -74,7 +77,9 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
   };
 
   useKeyboard((key) => {
-    if (key.ctrl && key.name === "c") quit();
+    // In the terminal workspace, ctrl+c must reach the focused PTY (claude, a
+    // shell) — the Term screen owns quitting from there.
+    if (key.ctrl && key.name === "c" && route.name !== "term") quit();
   });
 
   return (
@@ -89,12 +94,19 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
       {route.name === "restore" && discovery && <Restore discovery={discovery} back={back} preset={route.preset} />}
       {route.name === "localdb" && <LocalDb go={go} back={back} />}
       {route.name === "pull" && discovery && <Pull discovery={discovery} back={back} />}
+      {route.name === "startup" && <Startup back={stack.length > 1 ? back : quit} />}
+      {route.name === "term" && <Term cwd={cwd} back={stack.length > 1 ? back : quit} />}
+      {route.name === "review" && (
+        <Review cwd={cwd} scope={route.scope} autoStart={route.autoStart} back={stack.length > 1 ? back : quit} />
+      )}
       {route.name === "projects" && (
         <Projects
           root={projectsRoot()}
           cwd={cwd}
           choose={chooseProject}
           run={runHere}
+          openStartup={() => go({ name: "startup" })}
+          openTerm={() => go({ name: "term" })}
           leave={stack.length > 1 ? back : quit}
         />
       )}

@@ -36,7 +36,13 @@ export function killAll(): void {
 
 process.on("exit", killAll);
 
-function treeKill(pid: number): void {
+/** Track an externally spawned process so killAll() reaps it on quit. */
+export function trackProcess(handle: ProcHandle): () => void {
+  running.add(handle);
+  return () => running.delete(handle);
+}
+
+export function treeKill(pid: number): void {
   if (process.platform === "win32") {
     Bun.spawnSync(["taskkill", "/pid", String(pid), "/T", "/F"], { stdout: "ignore", stderr: "ignore" });
   } else {
@@ -73,11 +79,19 @@ async function pumpLines(
 
 /** Run a package.json script with the package's own package manager, streaming output lines. */
 export function runScript(pkg: PackageInfo, scriptName: string, onLine: (line: OutputLine) => void): ProcHandle {
-  const inner = `${pkg.pm} run ${scriptName}`;
+  return runCommand(`${pkg.pm} run ${scriptName}`, pkg.dir, onLine);
+}
+
+/**
+ * Run an arbitrary shell command in a directory, streaming output lines. Same
+ * lifecycle as runScript (tracked in `running`, tree-killed on quit) — this is
+ * the engine behind the startup dashboard's long-lived dev servers.
+ */
+export function runCommand(command: string, cwd: string, onLine: (line: OutputLine) => void): ProcHandle {
   const cmd =
-    process.platform === "win32" ? ["cmd.exe", "/d", "/s", "/c", inner] : ["sh", "-c", inner];
+    process.platform === "win32" ? ["cmd.exe", "/d", "/s", "/c", command] : ["sh", "-c", command];
   const proc = Bun.spawn(cmd, {
-    cwd: pkg.dir,
+    cwd,
     stdout: "pipe",
     stderr: "pipe",
     stdin: "ignore",
@@ -151,4 +165,23 @@ export function runTool(
     return { code, stderrTail: tail };
   })();
   return { handle, result };
+}
+
+/**
+ * Open a URL in Chrome (fire-and-forget, never tracked — we don't want to kill
+ * the browser when the tui exits). `start chrome` resolves via Windows' App
+ * Paths registry; the empty "" is the mandatory window-title arg to `start`.
+ */
+export function openInChrome(url: string): void {
+  const cmd =
+    process.platform === "win32"
+      ? ["cmd.exe", "/d", "/s", "/c", "start", "", "chrome", url]
+      : process.platform === "darwin"
+        ? ["open", "-a", "Google Chrome", url]
+        : ["google-chrome", url];
+  try {
+    Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+  } catch {
+    /* no chrome — nothing we can do from a tui */
+  }
 }

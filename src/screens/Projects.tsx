@@ -5,7 +5,9 @@ import { T } from "../theme.ts";
 import { Footer, type Hint } from "../components/Footer.tsx";
 import { CARD_HEIGHT, CARD_MIN_WIDTH, CLAUDE_COMMAND, ProjectCard } from "../components/ProjectCard.tsx";
 import { CommandCard } from "../components/CommandCard.tsx";
+import { ActionCard, type ActionSpec } from "../components/ActionCard.tsx";
 import { CommandDelete, CommandEditor, type CommandDraft } from "../components/CommandEditor.tsx";
+import { fuzzyMatch, type Match } from "../lib/fuzzy.ts";
 import {
   loadCommands,
   matchCommand,
@@ -34,8 +36,44 @@ interface Props {
   choose: (dir: string, command?: string) => void;
   /** Runs a command in the shell's current directory and quits. */
   run: (command: string) => void;
+  /** Opens the startup dashboard (typed "startup" or clicked its card). */
+  openStartup: () => void;
+  /** Opens the terminal multiplexer (typed "term" or clicked its card). */
+  openTerm: () => void;
   /** esc: pop back to the menu, or quit when this screen IS the app. */
   leave: () => void;
+}
+
+/** Built-in tui actions the filter can surface (they open a screen, not a dir). */
+const ACTIONS: ActionSpec[] = [
+  {
+    id: "startup",
+    title: "startup",
+    subtitle: "boot all your dev servers — live console dashboard",
+    icon: "⧉",
+    keywords: ["boot", "servers", "dev", "dashboard", "run"],
+  },
+  {
+    id: "term",
+    title: "term",
+    subtitle: "terminal multiplexer — shells & claude sessions in panes",
+    icon: "▓",
+    keywords: ["terminal", "terminals", "shell", "claude", "tmux", "multiplexer"],
+  },
+];
+
+/** Same shape as matchCommand: an exactly-typed action name wins outright. */
+function matchAction(action: ActionSpec, q: string): Match | null {
+  if (!q) return null; // only surface actions once you're typing
+  const name = fuzzyMatch(action.title, q);
+  const nameScore = name ? name.score + (action.title === q ? 4000 : action.title.startsWith(q) ? 400 : 0) : 0;
+  let kwScore = 0;
+  for (const kw of action.keywords) {
+    const m = fuzzyMatch(kw, q);
+    if (m) kwScore = Math.max(kwScore, m.score * 0.6);
+  }
+  if (nameScore <= 0 && kwScore <= 0) return null;
+  return nameScore >= kwScore ? { score: nameScore, positions: name?.positions ?? [] } : { score: kwScore, positions: [] };
 }
 
 const SORT_LABELS: Record<SortMode, string> = {
@@ -54,9 +92,10 @@ const GAP = 1;
  */
 type Cell =
   | { kind: "project"; key: string; project: ProjectInfo; positions: number[] }
-  | { kind: "command"; key: string; shortcut: CommandShortcut; positions: number[] };
+  | { kind: "command"; key: string; shortcut: CommandShortcut; positions: number[] }
+  | { kind: "action"; key: string; action: ActionSpec; positions: number[] };
 
-export function Projects({ root, cwd, choose, run, leave }: Props) {
+export function Projects({ root, cwd, choose, run, openStartup, openTerm, leave }: Props) {
   // Scanned during the first render, not in an effect: painting an empty grid
   // and filling it a frame later leaves torn cards behind, and 220 folders cost
   // ~50ms — far below anything you can see.
@@ -75,8 +114,18 @@ export function Projects({ root, cwd, choose, run, leave }: Props) {
   const parsed = useMemo(() => parseQuery(filter, root), [filter, root]);
   const q = parsed.query.trim().toLowerCase();
   const visible = useMemo<Cell[]>(() => {
-    // Commands always come first: there are a handful of them, they're the
-    // fastest thing on the screen, and they'd otherwise drown in 200 projects.
+    // Built-in actions pin to the very top (they only appear once you type):
+    // "startup" should be one keystroke away, never buried under projects.
+    const acts: { cell: Cell; s: number }[] = [];
+    for (const action of ACTIONS) {
+      const m = matchAction(action, q);
+      if (m) acts.push({ cell: { kind: "action", key: `act:${action.id}`, action, positions: m.positions }, s: m.score });
+    }
+    acts.sort((a, b) => b.s - a.s);
+    const actionCells = acts.map(({ cell }) => cell);
+
+    // Commands come next: there are a handful of them, they're the fastest thing
+    // on the screen, and they'd otherwise drown in 200 projects.
     const matched: { cell: Cell; s: number }[] = [];
     for (const shortcut of commands) {
       const m = matchCommand(shortcut, q);
@@ -92,7 +141,7 @@ export function Projects({ root, cwd, choose, run, leave }: Props) {
         project: p,
         positions: [],
       }));
-      return [...cmds, ...rows];
+      return [...actionCells, ...cmds, ...rows];
     }
 
     const scored: { cell: Cell; s: number; frecency: number }[] = [];
@@ -106,7 +155,7 @@ export function Projects({ root, cwd, choose, run, leave }: Props) {
       });
     }
     scored.sort((a, b) => b.s - a.s || b.frecency - a.frecency);
-    return [...cmds, ...scored.map(({ cell }) => cell)];
+    return [...actionCells, ...cmds, ...scored.map(({ cell }) => cell)];
   }, [projects, commands, q, sort]);
 
   // --- grid geometry (all explicit: nothing may size to its content) --------
@@ -165,9 +214,15 @@ export function Projects({ root, cwd, choose, run, leave }: Props) {
     });
   };
 
+  const openAction = (action: ActionSpec) => {
+    if (action.id === "startup") openStartup();
+    else if (action.id === "term") openTerm();
+  };
+
   const openCell = (cell: Cell) => {
     if (cell.kind === "project") choose(cell.project.dir);
-    else run(cell.shortcut.command);
+    else if (cell.kind === "command") run(cell.shortcut.command);
+    else openAction(cell.action);
   };
 
   const editCommand = (shortcut: CommandShortcut) =>
@@ -369,7 +424,17 @@ export function Projects({ root, cwd, choose, run, leave }: Props) {
               <box key={`row-${topRow + r}`} style={{ flexDirection: "row", gap: GAP, height: CARD_HEIGHT }}>
                 {cards.map((cell, c) => {
                   const i = firstVisible + r * cols + c;
-                  return cell.kind === "command" ? (
+                  return cell.kind === "action" ? (
+                    <ActionCard
+                      key={cell.key}
+                      action={cell.action}
+                      width={cardWidth}
+                      selected={i === index}
+                      positions={cell.positions}
+                      onHover={() => setSelected(i)}
+                      onOpen={() => openAction(cell.action)}
+                    />
+                  ) : cell.kind === "command" ? (
                     <CommandCard
                       key={cell.key}
                       shortcut={cell.shortcut}
@@ -422,7 +487,9 @@ function hints(editing: boolean, current: Cell | null): Hint[] {
     ];
   }
   const actions: Hint[] =
-    current?.kind === "command"
+    current?.kind === "action"
+      ? [["enter", "open"]]
+      : current?.kind === "command"
       ? [
           ["enter", "run"],
           ["ctrl+e", "edit"],
@@ -450,7 +517,12 @@ function StatusLine({
 }) {
   return (
     <box style={{ height: 1, width, marginTop: 1, flexDirection: "row" }}>
-      {!cell ? null : cell.kind === "command" ? (
+      {!cell ? null : cell.kind === "action" ? (
+        <text>
+          <span fg={T.orange}>{cell.action.title}</span>
+          <span fg={T.dim}>{`  ·  ${cell.action.subtitle}`}</span>
+        </text>
+      ) : cell.kind === "command" ? (
         <text>
           <span fg={T.fg}>{cell.shortcut.command}</span>
           <span fg={T.dim}>{`  ·  in ${cwd}`}</span>

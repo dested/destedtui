@@ -16,6 +16,7 @@ export const T = {
   orange: "#ff9e64",
   cyan: "#7dcfff",
   teal: "#73daca",
+  pink: "#ff007c",
   selectionBg: "#2f3449",
 } as const;
 

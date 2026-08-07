@@ -13,10 +13,13 @@ if (args.includes("--help") || args.includes("-h")) {
 Usage:
   destedtui             open the utility menu for the current directory
   destedtui --projects  pick a project and cd there  (alias: -p, --cd)
+  destedtui --startup   boot all your dev servers in a live console dashboard
+  destedtui --term      terminal multiplexer: shells & claude sessions in panes
   destedtui --backup    jump straight to Postgres backup
   destedtui --restore   jump straight to Postgres restore
   destedtui --local     browse localhost Postgres databases
   destedtui --pull      clone a .env database into localhost
+  destedtui --review    clean-context claude review of this repo
 
   destedtui --install-shell   add \`proj\` + auto-launch to your PowerShell profile
 
@@ -27,6 +30,7 @@ Utilities:
   PG Restore      restore a zip/dump/.sql — original server or localhost
   Local Postgres  browse localhost DBs: create, drop, back up, restore into
   Pull to Local   dump a remote/.env DB and restore it into localhost, one shot
+  Review          clean-context claude code review — changes, commits, branch, or a PR
 
 Postgres client tools are auto-downloaded per server version and cached
 in ~/.destedtui/pg. Nothing to install.`);
@@ -52,10 +56,13 @@ if (args.includes("--install-shell")) {
 
 let initialRoute: Route = { name: "menu" };
 if (args.includes("--projects") || args.includes("--cd") || args.includes("-p")) initialRoute = { name: "projects" };
+else if (args.includes("--startup")) initialRoute = { name: "startup" };
+else if (args.includes("--term")) initialRoute = { name: "term" };
 else if (args.includes("--restore")) initialRoute = { name: "restore" };
 else if (args.includes("--backup")) initialRoute = { name: "backup" };
 else if (args.includes("--local")) initialRoute = { name: "localdb" };
 else if (args.includes("--pull")) initialRoute = { name: "pull" };
+else if (args.includes("--review")) initialRoute = { name: "review" };
 
 const renderer = await createCliRenderer({
   exitOnCtrlC: false,

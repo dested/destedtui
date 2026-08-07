@@ -1,5 +1,6 @@
 import type { PackageInfo } from "./lib/discovery.ts";
 import type { RestoreMode } from "./lib/restore.ts";
+import type { ReviewScope } from "./lib/review.ts";
 
 export type Route =
   | { name: "menu" }
@@ -9,4 +10,7 @@ export type Route =
   | { name: "restore"; preset?: { url: string; mode: RestoreMode; label: string } }
   | { name: "localdb" }
   | { name: "pull" }
-  | { name: "projects" };
+  | { name: "startup" }
+  | { name: "term" }
+  | { name: "projects" }
+  | { name: "review"; scope?: ReviewScope; autoStart?: boolean };

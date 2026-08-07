@@ -31,6 +31,30 @@ export function MainMenu({ discovery, go, quit }: Props) {
       badgeColor: T.teal,
     },
     {
+      id: "review",
+      icon: "✓",
+      title: "Review",
+      subtitle: "clean-context claude review — changes, commits, branch, or a PR",
+      badge: "opus 4.8",
+      badgeColor: T.pink,
+    },
+    {
+      id: "startup",
+      icon: "⧉",
+      title: "Startup",
+      subtitle: "boot all your dev servers — one live console dashboard",
+      badge: "5 apps",
+      badgeColor: T.orange,
+    },
+    {
+      id: "term",
+      icon: "▓",
+      title: "Terminals",
+      subtitle: "a multiplexer — live shells & claude sessions in panes",
+      badge: "multiplexer",
+      badgeColor: T.teal,
+    },
+    {
       id: "scripts",
       icon: "▶",
       title: "Scripts",
@@ -101,6 +125,9 @@ export function MainMenu({ discovery, go, quit }: Props) {
           visible={14}
           onSelect={(item) => {
             if (item.id === "projects") go({ name: "projects" });
+            else if (item.id === "review") go({ name: "review" });
+            else if (item.id === "startup") go({ name: "startup" });
+            else if (item.id === "term") go({ name: "term" });
             else if (item.id === "scripts") go({ name: "scripts" });
             else if (item.id === "backup") go({ name: "backup" });
             else if (item.id === "restore") go({ name: "restore" });

@@ -4,6 +4,8 @@
 # that for you). It gives you:
 #
 #   proj / pj      open the project picker; enter cds the CURRENT shell there
+#   dested         short alias for the destedtui bin (dested --backup, etc.)
+#   term           jump straight into the terminal multiplexer, here
 #   auto-launch    the picker opens by itself when a new shell starts in the
 #                  projects root (that's Windows Terminal's startingDirectory)
 #
@@ -49,6 +51,20 @@ function proj {
 }
 
 Set-Alias -Name pj -Value proj -Scope Global
+
+# `dested` is just the bin under a shorter name, so the whole CLI is reachable
+# without the `tui` tail: `dested --term`, `dested --backup`, `dested --local`.
+Set-Alias -Name dested -Value destedtui -Scope Global
+
+# `term` drops you straight into the terminal multiplexer, using THIS shell's
+# directory for the panes it spawns — no cd handoff, you stay where you are.
+function term {
+    if (-not (Get-Command destedtui -ErrorAction SilentlyContinue)) {
+        Write-Warning "destedtui is not on PATH - run 'bun link' in G:\code\destedtui"
+        return
+    }
+    destedtui --term
+}
 
 function Test-DestedTuiAutostart {
     # $CommandLine is a parameter purely so this can be tested with a simulated

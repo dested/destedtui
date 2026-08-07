@@ -1,0 +1,49 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Grep",
+      "Glob",
+      "Bash(git status*)",
+      "Bash(git diff*)",
+      "Bash(git log*)",
+      "Bash(git show*)",
+      "Bash(git ls-files*)",
+      "Bash(git rev-parse*)",
+      "Bash(git branch*)",
+      "Bash(git merge-base*)",
+      "Bash(git blame*)",
+      "Bash(gh pr view*)",
+      "Bash(gh pr diff*)",
+      "Bash(gh pr checks*)",
+      "Bash(tsc*)",
+      "Bash(npx tsc*)",
+      "Bash(bunx tsc*)",
+      "Bash(bun run typecheck*)",
+      "Bash(npm run typecheck*)",
+      "Bash(bun run lint*)",
+      "Bash(npm run lint*)",
+      "Bash(bunx eslint*)",
+      "Bash(npx eslint*)"
+    ],
+    "deny": [
+      "Edit",
+      "Write",
+      "NotebookEdit",
+      "WebFetch",
+      "WebSearch",
+      "Task",
+      "Agent",
+      "Bash(git add*)",
+      "Bash(git commit*)",
+      "Bash(git push*)",
+      "Bash(git checkout*)",
+      "Bash(git restore*)",
+      "Bash(git reset*)",
+      "Bash(git stash*)",
+      "Bash(git clean*)",
+      "Bash(rm*)",
+      "Bash(del*)"
+    ]
+  }
+}
