@@ -17,6 +17,22 @@ A clean-context code review of whatever repo you're in, run by a **fresh headles
 - Headless mode for scripts and the `/sal-review` Claude skill: `review --headless [scope]` prints the classic ANSI report (no TUI, no commit); `--dry-run` prints the assembled prompt. Exit codes: 0 pass · 1 blocked · 2 error. `--model`/`--effort` override the pinned reviewer.
 - The reviewer is **read-only by construction**: `--permission-mode dontAsk` + an allowlist (`prompts/reviewer-settings.json`) of Read/Grep/Glob, read-only git, `gh pr view/diff/checks`, and typecheck/lint commands, with mutations explicitly denied. Never add Edit/Write/mutating-git to it.
 
+## Quality bar — how output is judged
+
+Sal benchmarks this tool **head-to-head against a raw interactive Claude session** reviewing the same changeset (done 2026-08-06 on coterietax.com PR #3; v1 won on peak findings — caught an admin→user visibility widening the raw session missed — but lost on coverage). The standard that produced prompt v2, and that any future prompt change must hold:
+
+- **Coverage counts as much as peak findings** — every real minor reported, not just the impressive ones.
+- **Merge & deploy notes are first-class** — migration/schema risk (additive vs destructive, backfill semantics, safe deploy order with the repo's real scripts), seeds/env follow-ups, PR hygiene. A code-defects-only report loses to a chat session.
+- **Visibility/permission widening** (auth gates relaxed, data newly exposed) is ≥ warn; wrong operational claims in changed docs are warns; touched visual files get diffed against ui.md.
+- **Never truncate model output in the TUI** — a clipped summary is a defect (SUMMARY_ROWS exists to bound painting, not to shorten content; widen it before ever cutting).
+- After a material prompt change, **re-benchmark the same way** before trusting it.
+
+## Accepted risks / open questions
+
+- `reviewer-settings.json` enforces read-only via prefix globs + `dontAsk`; output redirection or chaining appended to an allowed prefix (`git log > f`) is a theoretical write vector. Accepted for a personal tool reviewing own code — harden before pointing it at untrusted diffs.
+- ListPicker can fire enter on a stale row when keys arrive faster than a render (scripted/burst input only; humans can't hit it).
+- Carried-over ideas, not built: `--deep` multi-lens fan-out, Stop-hook auto-review, `review fix` auto-remediation.
+
 ## Touchpoints
 
 | Part | File |
