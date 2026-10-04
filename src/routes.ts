@@ -15,4 +15,5 @@ export type Route =
   | { name: "ports" }
   | { name: "keys"; rotate?: { fingerprint?: string; dead?: boolean; simulate?: boolean } }
   | { name: "projects" }
+  | { name: "claude" }
   | { name: "review"; scope?: ReviewScope; autoStart?: boolean };

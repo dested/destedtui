@@ -1,11 +1,11 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-10-03.
+> Last updated: 2026-10-04.
 
 ## What this is
 
-Personal dev-project TUI for dested. Four jobs: (1) a **project picker** that lists everything in `g:\code` ranked by how often you open it, fuzzy-filters it, carries your saved command shortcuts, and `cd`s the shell there — it auto-launches in every new terminal that starts in `g:\code`; (2) `cd` into any project and run `destedtui` for per-project utilities — a monorepo-aware package.json script runner and Postgres backup/restore driven by `.env` `DATABASE_URL`s (pg client tools auto-downloaded per server major version so dumps are never version-mismatched); (3) a second global bin, **`review`** — a clean-context code review of the current repo by a fresh headless `claude-opus-4-8` process, with scope picking (uncommitted/staged/commits/branch/PR), a streaming activity feed, and a gated in-TUI commit. See [features/review.md](features/review.md); (4) a third global bin, **`keys`** — a DPAPI-encrypted vault for every AI API key, one per project per provider, minted through provider admin APIs where they exist and written into each project's `.env`. See [features/keys.md](features/keys.md).
+Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that lists everything in `g:\code` ranked by how often you open it, fuzzy-filters it, carries your saved command shortcuts, and `cd`s the shell there — it auto-launches in every new terminal that starts in `g:\code`; (2) `cd` into any project and run `destedtui` for per-project utilities — a monorepo-aware package.json script runner and Postgres backup/restore driven by `.env` `DATABASE_URL`s (pg client tools auto-downloaded per server major version so dumps are never version-mismatched); (3) a second global bin, **`review`** — a clean-context code review of the current repo by a fresh headless `claude-opus-4-8` process, with scope picking (uncommitted/staged/commits/branch/PR), a streaming activity feed, and a gated in-TUI commit. See [features/review.md](features/review.md); (4) a third global bin, **`keys`** — a DPAPI-encrypted vault for every AI API key, one per project per provider, minted through provider admin APIs where they exist and written into each project's `.env`. See [features/keys.md](features/keys.md); (5) **Claude usage** — what every project cost in Claude Code (API-equivalent), when you worked on it, every session, from the transcripts in `~/.claude/projects`. See [features/claude-usage.md](features/claude-usage.md).
 
 ## Quick Reference
 
@@ -13,7 +13,7 @@ Personal dev-project TUI for dested. Four jobs: (1) a **project picker** that li
 - **Entry point:** `src/index.tsx` → arg parsing → `createCliRenderer` → `<App/>`
 - **Type-check:** `bun x tsc --noEmit`
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
-- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys` (jump straight to a screen), `--install-shell`, `--help`, `--version`
+- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys`, `--claude` (jump straight to a screen), `--usage` (print Claude usage, `--days`/`--project`/`--json`), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
 - **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set`/`usage`/`push`/`drydock`/`rotate --dry-run` for Claude sessions (the `keys` skill, source `skill/keys/`). Values never on argv or stdout — fingerprints only. Exit 0 ok / 1 user error / 2 provider API error
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
@@ -22,6 +22,7 @@ Personal dev-project TUI for dested. Four jobs: (1) a **project picker** that li
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
 - **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock` + `usage.json` (usage cache, no secrets, 15-min freshness) + `drydock.json` (Drydock apps → folders, env as var → fingerprint, 15-min freshness); `KEYS_VAULT_DIR` overrides the folder; `DRYDOCK_URL` overrides the portal (`http://localhost:4400/trpc`)
+- **Claude usage cache:** `~/.destedtui/claude-usage.json` (~16 MB, per-transcript offsets + per-message token tuples, no $); `CLAUDE_PROJECTS_DIR` overrides the transcript folder
 
 ## Stack
 
@@ -82,6 +83,7 @@ src/
     Review.tsx          code review: scope picker (live badges) → streaming reviewer feed → PASS/BLOCKED report + commit gate
     Keys.tsx            the key vault: rows grouped by project/provider, ⚠ reuse badges, .env/↗/✕ row buttons, forms that replace the list
     KeysUsage.tsx       the Keys screen's Usage view (`u`): spend per owner, hottest first, sparklines, per-key detail strip
+    ClaudeUsage.tsx     claude code usage: tabs 1 projects / 2 timeline (project × day heatmap) / 3 sessions (▶ resume) / 4 days, range chips, detail strip
     KeysRotate.tsx      the rotate screen (`R`): shared keys → overview/plan → confirmed walk → revoke; dead-key batch (`d`); --simulate
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all)
@@ -106,6 +108,12 @@ src/
     reviewHeadless.ts   --headless path: ANSI report renderer + runHeadless (exit codes)
     run.ts              Bun.spawn wrappers: runScript/runCommand (line streaming), runTool, openInChrome, treeKill, trackProcess, killAll
     zip.ts              fflate streaming: createBackupZip, readZipMetadata, extractZipEntry
+    claude/
+      pricing.ts        $/MTok per model (longest-prefix match), cache read/write + fast multipliers, shortModel
+      scan.ts           transcript walk + incremental zod cache (byte offsets, flat per-message tuples, in-file dedupe), worker msg schema
+      scanWorker.ts     runs scan() in a Bun Worker so the cold ~55s scan never blocks a frame
+      view.ts           load (cross-file dedupe, cwd → project) + summarize(range): projects, sessions, days, heatmap, active minutes
+      cli.ts            `destedtui --usage` printer / --json
     keys/
       vault.ts          zod vault schema, DPAPI read, locked atomic write + 5 backups, fingerprint, reuseGroups
       win32.ts          bun:ffi: CryptProtectData/CryptUnprotectData + clipboard read/clear/write
@@ -143,6 +151,9 @@ src/
 | `keys push` / following a deploy | `src/lib/keys/push.ts` + `waitForDeploy` in `drydock.ts` |
 | The rotate walk, finish, dead-key batch | `src/lib/keys/rotate.ts` (every step takes `dryRun`) + `src/screens/KeysRotate.tsx` — `features/keys.md` § Rotate |
 | Headless frames of the Keys screens (no tmux) | `bun scripts/snap-keys.tsx --rotate --simulate --keys "…snap"` |
+| Claude Code usage (cost/tokens/sessions per project) | `src/screens/ClaudeUsage.tsx` + `src/lib/claude/` — spec in `features/claude-usage.md`; headless frames `bun scripts/snap-claude.tsx --keys "2 snap"` |
+| A model's price / a new Claude model | `TABLE` in `src/lib/claude/pricing.ts` (costs are computed at view time — no rescan needed) |
+| Which project a session belongs to | `projectOf` in `src/lib/claude/view.ts` |
 | Add a provider's usage API | one file in `src/lib/keys/usage/` exporting a `UsageFetcher` + a line in `usage/index.ts` |
 | Add a provider that can mint | one file in `src/lib/keys/adapters/` + a line in `adapters/index.ts` + `mint:` on the provider in `providers.ts` |
 | Which env var names map to a provider on import | `aliases`/`prefixes` in `src/lib/keys/providers.ts` + `classify` in `importer.ts` |
@@ -195,6 +206,8 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 | `Vault` / `KeyRecord` / `Provider` / `AdminCredential` | `lib/keys/vault.ts` | zod-validated vault contents (values inside — never render them) |
 | `KeyView` | `lib/keys/ops.ts` | value-free key row every list/screen/`--json` uses |
 | `MintAdapter` | `lib/keys/adapters/types.ts` | one provider's admin API: mint / revoke / locate |
+| `UsageCache` / `FileEntry` | `lib/claude/scan.ts` | the transcript cache (zod) |
+| `Dataset` / `Summary` / `ProjectRow` / `SessionRow` / `DayRow` | `lib/claude/view.ts` | loaded messages + per-range aggregates every Claude usage view reads |
 
 ## Gotchas & hard rules
 
@@ -233,6 +246,8 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Rotation never revokes before the finish.** Steps retire a project's old record locally only; the remote revoke happens once, after every new-key project is verified and a fresh Drydock read shows no app on the old value.
 - **psmux mangles opentui diff frames** (runs of unchanged spaces collapse in `capture-pane`), so a screen you navigate *to* looks torn in tmux. Frames for review: `scripts/snap-keys.tsx` (opentui's test renderer), or launch straight into the view.
 - Windows clipboard history (Win+V) keeps its own copy of anything copied; `keys add --clipboard` clears the live clipboard only.
+- **tmux (psmux) misdraws diffed rows**: spaces opentui skips with a cursor move vanish in `capture-pane`, so padded columns look collapsed when they aren't. Judge alignment with the headless frame scripts (`scripts/snap-claude.tsx`, `scripts/snap-keys.tsx` — they read opentui's own buffer), not a tmux capture.
+- **Claude transcripts write one line per content block, each repeating the message's usage** — sum lines naively and you double-to-triple count. Dedupe on `message.id + requestId` (`lib/claude/scan.ts`). Tool inputs contain nested `"model":"opus"` objects; only `message.model` is the real model.
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 
 ## Status
@@ -243,5 +258,6 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Done** [Review](features/review.md) — clean-context `claude-opus-4-8` code review as a second global bin (`review`): scope picker (uncommitted/staged/last commit/recent commits/branch/PR via gh), streaming tool feed, PASS/BLOCKED report, gated commit, `--headless` for the `/sal-review` skill. Absorbed from the retired `G:\code\sal-review` repo 2026-08-06; ledger dropped (see decisions.md).
 - **Done** Localhost (`ports`) — every node/bun listener with URL, page title, cwd, command, uptime, memory; `x` kills the whole dev-command chain (two-press; names exactly what dies + other ports in the same tree), `shift+x` just the listener; `a` shows every TCP listener. Menu tile + `--ports` + `ports` shell fn + typing "ports" in the picker. Verified in tmux: 200×46 and 100×30 renders, filter, keyboard + mouse kill of a throwaway `bun run dev` chain, `g` cd handoff.
 - **Done** [Keys](features/keys.md) — `keys` bin + screen + skill + PowerShell `Use-Keys`. OpenAI mint → 200 → revoke → 401 verified live; `keys import` run for real (98 keys, 65 projects, 20 shared values). xAI/OpenRouter/fal/ElevenLabs adapters built from docs but not exercised (no admin credentials).
+- **Done** [Claude usage](features/claude-usage.md) — per-project cost/tokens/sessions/active time, project × day heatmap, sessions with resume, day log; `--claude`, `--usage`, menu tile, "claude" in picker. Pricing checked against Claude Code's own `cost-state` (single-model sessions match to the cent). Frames verified headless at 180×46/120×30/100×30.
 - **Not built** (menu shows "coming soon"): Git dashboard, .env inspector, node_modules nuker
 - **Next:** whichever coming-soon tile the user picks

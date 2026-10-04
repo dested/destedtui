@@ -18,6 +18,7 @@ import { Ports } from "./screens/Ports.tsx";
 import { Projects } from "./screens/Projects.tsx";
 import { Review } from "./screens/Review.tsx";
 import { Keys } from "./screens/Keys.tsx";
+import { ClaudeUsage } from "./screens/ClaudeUsage.tsx";
 import { projectsRoot, recordProjectOpen } from "./lib/projects.ts";
 import { announceCd, announceRun, emitCd } from "./lib/cd.ts";
 
@@ -100,6 +101,7 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
       {route.name === "term" && <Term cwd={cwd} back={stack.length > 1 ? back : quit} />}
       {route.name === "ports" && <Ports choose={chooseProject} back={stack.length > 1 ? back : quit} />}
       {route.name === "keys" && <Keys cwd={cwd} rotate={route.rotate} back={stack.length > 1 ? back : quit} />}
+      {route.name === "claude" && <ClaudeUsage choose={chooseProject} back={stack.length > 1 ? back : quit} />}
       {route.name === "review" && (
         <Review cwd={cwd} scope={route.scope} autoStart={route.autoStart} back={stack.length > 1 ? back : quit} />
       )}
@@ -113,6 +115,7 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
           openTerm={() => go({ name: "term" })}
           openPorts={() => go({ name: "ports" })}
           openKeys={() => go({ name: "keys" })}
+          openClaude={() => go({ name: "claude" })}
           leave={stack.length > 1 ? back : quit}
         />
       )}

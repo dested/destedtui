@@ -71,6 +71,14 @@ export function MainMenu({ discovery, go, quit }: Props) {
       badgeColor: T.orange,
     },
     {
+      id: "claude",
+      icon: "◷",
+      title: "Claude Usage",
+      subtitle: "claude code cost, tokens & sessions per project — timeline, day log",
+      badge: "transcripts",
+      badgeColor: T.purple,
+    },
+    {
       id: "scripts",
       icon: "▶",
       title: "Scripts",
@@ -137,7 +145,7 @@ export function MainMenu({ discovery, go, quit }: Props) {
         <ListPicker
           items={items}
           vimKeys
-          visible={14}
+          visible={15}
           onSelect={(item) => {
             if (item.id === "projects") go({ name: "projects" });
             else if (item.id === "review") go({ name: "review" });
@@ -145,6 +153,7 @@ export function MainMenu({ discovery, go, quit }: Props) {
             else if (item.id === "term") go({ name: "term" });
             else if (item.id === "ports") go({ name: "ports" });
             else if (item.id === "keys") go({ name: "keys" });
+            else if (item.id === "claude") go({ name: "claude" });
             else if (item.id === "scripts") go({ name: "scripts" });
             else if (item.id === "backup") go({ name: "backup" });
             else if (item.id === "restore") go({ name: "restore" });

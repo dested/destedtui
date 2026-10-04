@@ -2,6 +2,14 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-04 — Claude usage: native transcript parser, API-equivalent dollars, priced at view time
+Sal's calls: build it natively (no repo of his existed — only the `cc` → `bunx ccusage` shortcut), label dollars API-equiv, roll sessions up to the top-level g:\code folder, all four views. Mine:
+- **Own parser over shelling out to ccusage.** ccusage re-reads all ~18 GB each run (~1 min) and groups by exact cwd; an incremental cache by byte offset makes reopening instant and lets project, active time and timeline be ours.
+- **The cache stores tokens, never dollars**, so a price fix reprices history with no rescan. Prices live in one table in `pricing.ts`, verified against Claude Code's `cost-state` lines rather than LiteLLM's feed (which lags new models).
+- **Transcripts that vanish keep their cache entry** — Claude Code deletes old transcripts, and the cache is then the only record.
+- **Active time = event minutes with ≤5-minute gaps, unioned across sessions.** Wall-clock first→last overstates a session left open overnight; summing sessions double-counts parallel agents.
+- **Rejected:** summarize in the Worker (the structured-clone round trip costs what it saves); per-day aggregates in the cache (range filtering and re-pricing need per-message data, and 260k tuples is only ~16 MB).
+
 ## 2026-10-04 — Keys rotate + Drydock: the builder's calls
 Sal's: a rotate screen (`R` / `keys rotate`) — overview, a confirmed step-by-step walk (create → .env → Drydock push + redeploy → verify), resumable from the vault, revoke only after every new-key project is verified, console fallback naming the key; batch revoke of dead shared keys, blocked on "deployed, value unknown" until overridden; `keys push`; `[dd]` markers; apps mapped by repo, then name, then a manual override. Mine:
 - **The override wins over repo/name matching** (the spec listed it last). A manual pin is a correction; letting an automatic match beat it would make it useless. `-` pins an app to "not a local project".

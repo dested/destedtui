@@ -22,6 +22,8 @@ Usage:
   destedtui --local     browse localhost Postgres databases
   destedtui --pull      clone a .env database into localhost
   destedtui --review    clean-context claude review of this repo
+  destedtui --claude    claude code usage: cost, tokens, sessions, timeline per project
+  destedtui --usage     the same, printed (--days 1|7|30|90|all, --project <name>, --json)
 
   destedtui --install-shell   add \`proj\` + auto-launch to your PowerShell profile
 
@@ -56,6 +58,11 @@ if (args.includes("--install-shell")) {
   process.exit(proc.exitCode ?? 0);
 }
 
+if (args.includes("--usage")) {
+  const { runUsageCli } = await import("./lib/claude/cli.ts");
+  process.exit(runUsageCli(args));
+}
+
 let initialRoute: Route = { name: "menu" };
 if (args.includes("--projects") || args.includes("--cd") || args.includes("-p")) initialRoute = { name: "projects" };
 else if (args.includes("--startup")) initialRoute = { name: "startup" };
@@ -67,6 +74,7 @@ else if (args.includes("--backup")) initialRoute = { name: "backup" };
 else if (args.includes("--local")) initialRoute = { name: "localdb" };
 else if (args.includes("--pull")) initialRoute = { name: "pull" };
 else if (args.includes("--review")) initialRoute = { name: "review" };
+else if (args.includes("--claude")) initialRoute = { name: "claude" };
 
 const renderer = await createCliRenderer({
   exitOnCtrlC: false,

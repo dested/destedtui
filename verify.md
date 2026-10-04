@@ -88,6 +88,13 @@ Touchpoints: `src/lib/keys/usage/`, `src/screens/KeysUsage.tsx`, `printUsage` in
 3. No secrets in the cache: `grep -c -E 'sk-|sk_|xai-|gsk_|r8_' ~/.destedtui/keys/usage.json` → only the literal `sk-ant-admin…` hint text.
 4. tmux at 170×44 and 100×30: `bun run src/keys.tsx`, `u` → Usage view; ↓ onto a shared line → the detail strip says it can't be split and names the key; `u` back to the list (not `q` — that leaves the screen).
 
+### Claude usage [cheap — read-only]
+Touchpoints: `src/lib/claude/`, `src/screens/ClaudeUsage.tsx`
+1. `bun src/index.tsx --usage --days 7` → header line + projects table + day log; a second run takes ~1–2s (warm cache). `--json` parses; `--project <name>` lists its sessions.
+2. Pricing check: sessions with a `"type":"cost-state"` line carry Claude Code's own `totalCostUSD`; single-model sessions must match ours to the cent (mixed ones read ~5% low — background Haiku isn't in transcripts).
+3. Frames, no tmux (psmux misdraws diffed rows): `bun scripts/snap-claude.tsx --size 180x46 --keys "snap 2 snap left left snap 3 snap 4 snap d snap"` and again at `100x30` — columns aligned, timeline total column flush right, footer fits.
+4. Drill-down: `--keys "enter snap escape snap"` → sessions filtered to the top project (`▸ name` in the tab row), esc clears the filter.
+
 ### Core-logic smoke (no DB needed) [medium]
 Touchpoints: `src/lib/discovery.ts`, `pgurl.ts`, `zip.ts`
 Write a scratch script (outside the repo) that builds a fake monorepo + `.env`, then asserts: `discover()` finds packages/dbs, `parsePgUrl` decodes an encoded password, and `createBackupZip` → `readZipMetadata` → `extractZipEntry` round-trips a few MB byte-identically.
