@@ -55,6 +55,14 @@ export function MainMenu({ discovery, go, quit }: Props) {
       badgeColor: T.teal,
     },
     {
+      id: "ports",
+      icon: "◉",
+      title: "Localhost",
+      subtitle: "every node/bun server listening — links, cwd, kill",
+      badge: "live",
+      badgeColor: T.blue,
+    },
+    {
       id: "scripts",
       icon: "▶",
       title: "Scripts",
@@ -97,7 +105,6 @@ export function MainMenu({ discovery, go, quit }: Props) {
       disabled: discovery !== null && dbCount === 0,
     },
     { id: "git", icon: "⎇", title: "Git Dashboard", subtitle: "branches, dirty files, quick actions", badge: "coming soon", disabled: true },
-    { id: "ports", icon: "⚡", title: "Port Killer", subtitle: "see & kill whatever squats on your dev ports", badge: "coming soon", disabled: true },
     { id: "env", icon: "☰", title: ".env Inspector", subtitle: "diff envs, spot missing keys", badge: "coming soon", disabled: true },
     { id: "nuke", icon: "✕", title: "node_modules Nuker", subtitle: "reclaim disk from dead installs", badge: "coming soon", disabled: true },
   ];
@@ -128,6 +135,7 @@ export function MainMenu({ discovery, go, quit }: Props) {
             else if (item.id === "review") go({ name: "review" });
             else if (item.id === "startup") go({ name: "startup" });
             else if (item.id === "term") go({ name: "term" });
+            else if (item.id === "ports") go({ name: "ports" });
             else if (item.id === "scripts") go({ name: "scripts" });
             else if (item.id === "backup") go({ name: "backup" });
             else if (item.id === "restore") go({ name: "restore" });

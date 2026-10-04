@@ -15,6 +15,7 @@ Usage:
   destedtui --projects  pick a project and cd there  (alias: -p, --cd)
   destedtui --startup   boot all your dev servers in a live console dashboard
   destedtui --term      terminal multiplexer: shells & claude sessions in panes
+  destedtui --ports     every node/bun localhost server — open, cd, kill
   destedtui --backup    jump straight to Postgres backup
   destedtui --restore   jump straight to Postgres restore
   destedtui --local     browse localhost Postgres databases
@@ -58,6 +59,7 @@ let initialRoute: Route = { name: "menu" };
 if (args.includes("--projects") || args.includes("--cd") || args.includes("-p")) initialRoute = { name: "projects" };
 else if (args.includes("--startup")) initialRoute = { name: "startup" };
 else if (args.includes("--term")) initialRoute = { name: "term" };
+else if (args.includes("--ports")) initialRoute = { name: "ports" };
 else if (args.includes("--restore")) initialRoute = { name: "restore" };
 else if (args.includes("--backup")) initialRoute = { name: "backup" };
 else if (args.includes("--local")) initialRoute = { name: "localdb" };

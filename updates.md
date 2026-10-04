@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-03 — Localhost screen (the "Port killer" tile, built)
+Asked: every localhost server from a node/bun process, with links + working directory, pretty, killable. Done: `ports` screen — live table (title probe, cwd, command, uptime, mem) + detail pane with clickable links (LAN url when exposed) and the kill chain; two-press `x` kills the dev-command chain, `shift+x` the listener; `/` filter, `s` sort, `a` all listeners, `g` cd there. Scanner is pure bun:ffi into Win32 (~35ms). Entry: menu tile, `--ports`, `ports` shell fn, "ports" in picker. tsc green; verified in tmux incl. a real kill of a throwaway chain.
+Touched: src/lib/ports.ts, src/screens/Ports.tsx, src/App.tsx, src/routes.ts, src/index.tsx, src/screens/MainMenu.tsx, src/screens/Projects.tsx, shell/destedtui.ps1, cliffnotes.md, ui.md, decisions.md, verify.md
+
 ## 2026-09-12 — sal-board joins the startup fleet
 Asked: "add sal-board to startup". Done: SPECS entry in src/lib/startup.ts — folder sal-board, `bun run dev` (its scripts/dev.ts wraps portless + revives the proxy), open button hits https://board.localhost. Its "board.localhost" stdout line trips READY_RE's `localhost` branch. tsc green.
 Touched: src/lib/startup.ts, cliffnotes.md, updates.md

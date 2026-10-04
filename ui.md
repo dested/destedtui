@@ -33,7 +33,7 @@
 | `T.teal` | `#73daca` | projects accent (title, active filter border, sort mode) |
 | `T.pink` | `#ff007c` | review accent (Tokyo Night magenta) |
 
-Accent discipline: each screen owns one accent for its border title (`titleColor`) — menu purple, projects teal, scripts green, backup blue, restore orange, process cyan, review pink. Status colors are earned by state, never used for decoration.
+Accent discipline: each screen owns one accent for its border title (`titleColor`) — menu purple, projects teal, scripts green, backup blue, restore orange, process cyan, review pink, localhost blue (the palette ran out; backup and localhost are never on screen together). Status colors are earned by state, never used for decoration.
 
 ## Layout
 
@@ -50,6 +50,8 @@ Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue�
 **Buttons** are a one-row `box` with `T.surfaceAlt` background and one cell of padding either side, label in the action's own colour (`▶ dev` green, `✦ claude` purple). A button inside a clickable parent must `stopPropagation()`, and every button needs a `ctrl+<key>` twin in the footer.
 
 **The terminal pane** (`Term.tsx`) carries a one-line **note strip** just under its status row and above the emulator: `✎ note: <text>` (blue icon, `note:` dim, text `T.fg`), or a dim `✎ press t for a note` when empty, or the live draft with a `▏` caret in `T.yellow` while editing. It's a fixed height-1 row so it never reflows the terminal grid.
+
+**Table rows** (localhost): one line per item in fixed columns — caret, health dot, port, project (name `T.fg`, monorepo sub-path dim), command dim, runtime (node green, bun orange), uptime dim, memory (dim → yellow ≥600M → red ≥1G) — then the row's own fixed-width buttons (`↗` cyan, `✕` red). Destructive buttons live **on the row, never in a side pane**: hover selects, so a mouse travelling to a detail-pane button crosses other rows and retargets it. A kill arms on the first press (`✕?` on a red fill, panel border red, the status line names exactly what dies) and fires on the second within 3s.
 
 **Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), and the footer advertises both.
 
@@ -75,7 +77,7 @@ A box paints only the rect it occupies; opentui does not clear what a shrinking 
 | `Highlighted` | `src/components/Highlight.tsx` | a padded line with matched characters in a second colour |
 | `ProgressBar` | `src/components/ProgressBar.tsx` | flat block bar + dim percent |
 
-Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ▸ ⛁ ↺ ⎇ ☰ ✕ ✎ ◈ ◇ ▣ ◷ ↻ ⌂ ⚠). Project rows: `◈` git repo, `◇` plain folder; the badge is the detected stack, coloured per language. Command rows: `▸`.
+Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ▸ ⛁ ↺ ⎇ ☰ ✕ ✎ ◈ ◇ ▣ ◷ ↻ ⌂ ⚠). Health dots (localhost): `●` green = answered HTTP, `●` red = 5xx, `◌` yellow = accepted but silent, `○` dim = not HTTP, spinner = probing. Project rows: `◈` git repo, `◇` plain folder; the badge is the detected stack, coloured per language. Command rows: `▸`.
 
 **Check the width before adding a glyph.** `⚡` and `＋` are double-width and push the rest of a fixed-width line off its right edge — `⚡` cost the command card its badge; `☰` measured two cells in the review picker and shoved the badge column (use `≡`). If in doubt, render it in a card and count cells.
 

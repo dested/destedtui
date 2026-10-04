@@ -14,6 +14,7 @@ import { LocalDb } from "./screens/LocalDb.tsx";
 import { Pull } from "./screens/Pull.tsx";
 import { Startup } from "./screens/Startup.tsx";
 import { Term } from "./screens/Term.tsx";
+import { Ports } from "./screens/Ports.tsx";
 import { Projects } from "./screens/Projects.tsx";
 import { Review } from "./screens/Review.tsx";
 import { projectsRoot, recordProjectOpen } from "./lib/projects.ts";
@@ -96,6 +97,7 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
       {route.name === "pull" && discovery && <Pull discovery={discovery} back={back} />}
       {route.name === "startup" && <Startup back={stack.length > 1 ? back : quit} />}
       {route.name === "term" && <Term cwd={cwd} back={stack.length > 1 ? back : quit} />}
+      {route.name === "ports" && <Ports choose={chooseProject} back={stack.length > 1 ? back : quit} />}
       {route.name === "review" && (
         <Review cwd={cwd} scope={route.scope} autoStart={route.autoStart} back={stack.length > 1 ? back : quit} />
       )}
@@ -107,6 +109,7 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
           run={runHere}
           openStartup={() => go({ name: "startup" })}
           openTerm={() => go({ name: "term" })}
+          openPorts={() => go({ name: "ports" })}
           leave={stack.length > 1 ? back : quit}
         />
       )}

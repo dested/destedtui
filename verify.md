@@ -47,6 +47,13 @@ Caveat: capture-pane under psmux drops cells, so *some* raggedness is the captur
 ### Autostart guard [cheap]
 It cannot fire inside an agent shell (`CLAUDECODE` is set and the host launches pwsh with `-Command` — both deliberate refusals). Test the predicate directly instead: dot-source `shell/destedtui.ps1` with the trailing `if (Test-DestedTuiAutostart) { proj }` line stripped, then call `Test-DestedTuiAutostart -CommandLine @('…pwsh.dll') -Location 'G:\code'` (expect `True`) versus a project subfolder, an unrelated path, and `-Command`/`-File` argument lists (expect `False`).
 
+### Localhost screen [cheap]
+Touchpoints: `src/lib/ports.ts`, `src/screens/Ports.tsx`
+1. Scratch script: `scanServers({ all: false })` → every node/bun listener with cwd + cmdline populated and a sensible `killRoot` (e.g. `bun run dev` above `bun --watch server.ts`), under ~60ms.
+2. tmux (**`export MSYS_NO_PATHCONV=1` first**, or `/` arrives as `C:/Program Files/Git/`): `bun run src/index.tsx --ports` at `-x 200 -y 46` and `-x 100 -y 30` — columns aligned, detail pane only at ≥110 cols, status line not overprinting the last row.
+3. Kill, safely: a throwaway chain (scratchpad `package.json` with `"dev": "bun server.ts"`, `Bun.serve` on 4999) started with `bun run dev` in another tmux window. Filter `/throw` + enter; `x` → status reads `⚠ kill bun run dev (pid …) + 1 more`; `x` again → `✓ killed`, port 4999 refuses, the other window is back at its prompt. Mouse: move (`ESC[<35;col;rowM`) onto `✕` BEFORE pressing, or the press can land on the row body (which opens Chrome).
+4. `g`: point `DESTEDTUI_CD_FILE` at a temp file, select a row, `g` → the file holds that server's cwd.
+
 ### Script runner [cheap]
 Touchpoints: `src/lib/discovery.ts`, `src/lib/run.ts`, `src/screens/Scripts.tsx`, `src/screens/ProcessView.tsx`
 1. In this repo run `destedtui` → Scripts → filter "typecheck" → enter

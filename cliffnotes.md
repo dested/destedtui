@@ -1,7 +1,7 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-09-12.
+> Last updated: 2026-10-03.
 
 ## What this is
 
@@ -13,10 +13,11 @@ Personal dev-project TUI for dested. Three jobs: (1) a **project picker** that l
 - **Entry point:** `src/index.tsx` → arg parsing → `createCliRenderer` → `<App/>`
 - **Type-check:** `bun x tsc --noEmit`
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
-- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--backup`, `--restore`, `--local`, `--pull`, `--review` (jump straight to a screen), `--install-shell`, `--help`, `--version`
+- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--backup`, `--restore`, `--local`, `--pull`, `--review` (jump straight to a screen), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
-- **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here)
+- **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff)
+- **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. Windows-only.
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
 
@@ -42,7 +43,7 @@ prompts/
 ptyhost/
   host.mjs              Node sidecar: owns @lydell/node-pty, JSON-over-stdio, multiplexes every pane's PTY
 shell/
-  destedtui.ps1         `proj`/`pj` wrapper (temp-file cd handoff) + autostart guard + `dested` alias + `term` fn
+  destedtui.ps1         `proj`/`pj` + `ports` (shared `Invoke-DestedTuiCd` temp-file cd handoff) + autostart guard + `dested` alias + `term` fn
   install.ps1           idempotent marked block into the real $PROFILE (-Uninstall removes it)
 src/
   index.tsx             CLI entry: --help/--version/--projects/--backup/--restore/--local/--pull/--review/--install-shell
@@ -64,6 +65,7 @@ src/
   screens/
     MainMenu.tsx        utility tiles incl. disabled "coming soon" rows
     Startup.tsx         dev-fleet dashboard: rail of app cards (dot/spinner/buttons) + live console pane
+    Ports.tsx           localhost servers: live table (port/project/command/rt/up/mem + ↗ ✕ row buttons) + detail pane (title, links, cwd, kill chain); two-press kill, / filter, g = cd there
     Term.tsx            terminal multiplexer: rail of session CARDS (rename ✎, close ✕, live age) + active PTY pane with a note strip above it, nav/input modes, ctrl+b leader. No auto-spawn — starts empty.
     Projects.tsx        g:\code card grid: own type-ahead, hover, wheel, click/enter = cd + quit
     Scripts.tsx         fuzzy-filterable flat list of every package script
@@ -75,6 +77,7 @@ src/
     Review.tsx          code review: scope picker (live badges) → streaming reviewer feed → PASS/BLOCKED report + commit gate
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all)
+    ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd; kill-root chain walk, HTTP <title> probe, killServer
     term.ts             terminal multiplexer brain: `term` singleton — sessions, xterm emulators, active/mode, create/close, per-session notes (persist by title)
     ptyhost.ts          Bun-side client for the Node pty sidecar: spawns it, frames JSON, tree-kills it on exit
     projects.ts         scan g:\code, stack detect, frecency (own opens + zoxide), matchProject, inspectProject
@@ -116,6 +119,9 @@ src/
 | The `/sal-review` Claude skill | `~/.claude/skills/sal-review/SKILL.md` → `review --headless` |
 | The startup dev-fleet dashboard | `src/screens/Startup.tsx` (UI) + `src/lib/startup.ts` (the `startup` supervisor singleton) |
 | Which apps the dashboard boots / their ports | `src/lib/startup.ts` → `SPECS` (folder, command, url, desktop flag) |
+| The localhost / port killer screen | `src/screens/Ports.tsx` (UI) + `src/lib/ports.ts` (scan, probe, kill) |
+| What `x` kills on the localhost screen | `findKillRoot` + `isLauncher` in `lib/ports.ts` — climbs node/bun/`cmd /c` parents, never into this tui's ancestry, a shell, or a claude process |
+| Reading another process's cwd / command line | `inspect` in `lib/ports.ts` (PEB offsets, x64) |
 | A built-in picker action (type "startup") | `ACTIONS` + `matchAction` in `src/screens/Projects.tsx`, card in `components/ActionCard.tsx` |
 | Open a URL in Chrome | `src/lib/run.ts` → `openInChrome` |
 | Run an arbitrary long-lived command | `src/lib/run.ts` → `runCommand` (tracked in `running`, tree-killed on quit) |
@@ -188,6 +194,9 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **The reviewer child process is claude.cmd on Windows — argv is the enemy.** The prompt goes over **stdin** and spawn argv stays simple tokens (JSON/parens on a `.cmd` command line get mangled); permissions ride in via `--settings prompts/reviewer-settings.json`. Prompt template substitution must use **function replacers** (`.replace(x, () => v)`) — `$&`-class tokens in dynamic text silently corrupt string replacements. Reviewer output contract lives in BOTH `prompts/review.md` and `lib/review.ts` (`reviewResultSchema`) — change them together.
 - The review verdict is **computed by the CLI** (any blocker ⇒ blocked) — never trusted from the model. The reviewer proc is registered via `trackProcess` so quit/ctrl+c tree-kills it like every other child.
 - **Review output is judged against a raw Claude session** on the same diff (features/review.md "Quality bar"): coverage + merge/deploy notes matter as much as peak findings, and the TUI must never truncate model output. Re-benchmark after material prompt changes.
+- **Driving the TUI from Git Bash + tmux: `export MSYS_NO_PATHCONV=1` first.** MSYS rewrites a bare `/` argument to `C:/Program Files/Git/`, so `tmux send-keys '/'` types those letters into the app (on the localhost screen `o` opened Chrome and `g` cd'd away). Never send keys to a TUI session you can't see — tear down with `tmux kill-session`; two queued `Escape`s can coalesce and leave the app reading your next shell line as hotkeys.
+- **The localhost scanner's PEB offsets are x64** (`ProcessParameters` @0x20, `CurrentDirectory` @0x38, `CommandLine` @0x70). A 32-bit target would need the WOW64 PEB; node/bun are 64-bit, and a failed read just leaves cwd empty (row shows `·`). Processes owned by SYSTEM/other users can't be opened — same empty result, by design.
+- **HTTP probes mark a port `http` the moment headers arrive** and read `<title>` best-effort from the first chunks — an SSR stream may never end, and timing out the body used to misreport live servers as "not http". Self-signed TLS (portless :443) is accepted.
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 
 ## Status
@@ -196,5 +205,6 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Done** Startup dashboard — boots/babysits the 6 dev servers (todolist/deck/drydock/chirptime/sal-widgets/sal-board); tile + `--startup` + typing "startup" in the picker. Layout verified in tmux; live console + Chrome launch not auto-smoke-tested (would spawn real servers).
 - **Done** Terminal multiplexer (`term`) — interactive shells & `claude` sessions in panes, add/switch/close, mouse-driven, guaranteed cleanup. tile + `--term` + typing "term" in the picker. Verified end-to-end in tmux (typed commands run, per-pane isolation, 0 orphans on quit/abrupt-close). Live `claude` spawn not auto-tested (would burn tokens) — plumbing is identical to shells.
 - **Done** [Review](features/review.md) — clean-context `claude-opus-4-8` code review as a second global bin (`review`): scope picker (uncommitted/staged/last commit/recent commits/branch/PR via gh), streaming tool feed, PASS/BLOCKED report, gated commit, `--headless` for the `/sal-review` skill. Absorbed from the retired `G:\code\sal-review` repo 2026-08-06; ledger dropped (see decisions.md).
-- **Not built** (menu shows "coming soon"): Git dashboard, Port killer, .env inspector, node_modules nuker
+- **Done** Localhost (`ports`) — every node/bun listener with URL, page title, cwd, command, uptime, memory; `x` kills the whole dev-command chain (two-press; names exactly what dies + other ports in the same tree), `shift+x` just the listener; `a` shows every TCP listener. Menu tile + `--ports` + `ports` shell fn + typing "ports" in the picker. Verified in tmux: 200×46 and 100×30 renders, filter, keyboard + mouse kill of a throwaway `bun run dev` chain, `g` cd handoff.
+- **Not built** (menu shows "coming soon"): Git dashboard, .env inspector, node_modules nuker
 - **Next:** whichever coming-soon tile the user picks

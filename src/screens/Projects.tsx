@@ -40,6 +40,8 @@ interface Props {
   openStartup: () => void;
   /** Opens the terminal multiplexer (typed "term" or clicked its card). */
   openTerm: () => void;
+  /** Opens the localhost servers screen (typed "ports"). */
+  openPorts: () => void;
   /** esc: pop back to the menu, or quit when this screen IS the app. */
   leave: () => void;
 }
@@ -59,6 +61,13 @@ const ACTIONS: ActionSpec[] = [
     subtitle: "terminal multiplexer — shells & claude sessions in panes",
     icon: "▓",
     keywords: ["terminal", "terminals", "shell", "claude", "tmux", "multiplexer"],
+  },
+  {
+    id: "ports",
+    title: "ports",
+    subtitle: "every node/bun localhost server — open, cd, kill",
+    icon: "◉",
+    keywords: ["localhost", "servers", "kill", "port", "listening", "node", "bun"],
   },
 ];
 
@@ -95,7 +104,7 @@ type Cell =
   | { kind: "command"; key: string; shortcut: CommandShortcut; positions: number[] }
   | { kind: "action"; key: string; action: ActionSpec; positions: number[] };
 
-export function Projects({ root, cwd, choose, run, openStartup, openTerm, leave }: Props) {
+export function Projects({ root, cwd, choose, run, openStartup, openTerm, openPorts, leave }: Props) {
   // Scanned during the first render, not in an effect: painting an empty grid
   // and filling it a frame later leaves torn cards behind, and 220 folders cost
   // ~50ms — far below anything you can see.
@@ -217,6 +226,7 @@ export function Projects({ root, cwd, choose, run, openStartup, openTerm, leave 
   const openAction = (action: ActionSpec) => {
     if (action.id === "startup") openStartup();
     else if (action.id === "term") openTerm();
+    else if (action.id === "ports") openPorts();
   };
 
   const openCell = (cell: Cell) => {

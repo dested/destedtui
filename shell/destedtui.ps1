@@ -6,6 +6,7 @@
 #   proj / pj      open the project picker; enter cds the CURRENT shell there
 #   dested         short alias for the destedtui bin (dested --backup, etc.)
 #   term           jump straight into the terminal multiplexer, here
+#   ports          every node/bun server listening on localhost — open, cd, kill
 #   auto-launch    the picker opens by itself when a new shell starts in the
 #                  projects root (that's Windows Terminal's startingDirectory)
 #
@@ -21,6 +22,13 @@
 $global:DestedTuiProjectsRoot = if ($env:DESTEDTUI_PROJECTS_ROOT) { $env:DESTEDTUI_PROJECTS_ROOT } else { 'G:\code' }
 
 function proj {
+    Invoke-DestedTuiCd '--projects'
+}
+
+# Runs destedtui with the cd handoff wired up. Shared by `proj` and `ports` —
+# any screen that can "go to a folder" needs it.
+function Invoke-DestedTuiCd {
+    param([Parameter(Mandatory)][string]$Flag)
     if (-not (Get-Command destedtui -ErrorAction SilentlyContinue)) {
         Write-Warning "destedtui is not on PATH - run 'bun link' in G:\code\destedtui"
         return
@@ -29,7 +37,7 @@ function proj {
     $cdFile = Join-Path ([System.IO.Path]::GetTempPath()) ("destedtui-cd-{0}.txt" -f [guid]::NewGuid().ToString('N'))
     $env:DESTEDTUI_CD_FILE = $cdFile
     try {
-        destedtui --projects
+        destedtui $Flag
     } finally {
         Remove-Item Env:\DESTEDTUI_CD_FILE -ErrorAction SilentlyContinue
     }
@@ -64,6 +72,12 @@ function term {
         return
     }
     destedtui --term
+}
+
+# `ports` lists every node/bun localhost server (links, cwd, kill). Picking
+# "cd there" hands the folder back through the same temp-file trick as `proj`.
+function ports {
+    Invoke-DestedTuiCd '--ports'
 }
 
 function Test-DestedTuiAutostart {
