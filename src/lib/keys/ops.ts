@@ -193,6 +193,8 @@ export interface StoreOptions {
   replace?: boolean;
   /** Write the project's .env afterwards (default true). */
   writeEnv?: boolean;
+  /** With replace: retire the old record locally only, never at the provider (a rotation revokes it at the end). */
+  replaceLocalOnly?: boolean;
 }
 
 export interface StoreResult {
@@ -243,7 +245,9 @@ async function store(
     return { id: record.id, previous: current?.id };
   });
   const result: StoreResult = { key: mustView(stored.id), note };
-  if (stored.previous) {
+  if (stored.previous && opts.replaceLocalOnly) {
+    result.replaced = await revokeKey(stored.previous, { keepEnv: true, localOnly: true });
+  } else if (stored.previous) {
     try {
       result.replaced = await revokeKey(stored.previous, { keepEnv: true });
     } catch (err) {
@@ -373,29 +377,54 @@ export interface RevokeResult {
  * still active in another project (that would break them) — then mark it locally
  * and take its line out of the project's env file.
  */
+/** How to find a key in a provider console without its value: the name it was made under, else its last 4 characters. */
+export function consoleHint(k: KeyRecord): string {
+  const name = k.source === "minted" ? `named "keys-${k.project}${k.label ? `-${k.label}` : ""}"` : "";
+  const tail = `ending …${k.value.slice(-4)}`;
+  return name ? `${name} (${tail})` : tail;
+}
+
+export interface RemoteRevoke {
+  remote: "revoked" | "skipped";
+  note: string;
+  /** Set when a human has to delete it: where, and how to recognise it. */
+  console?: { url: string; hint: string };
+}
+
+/**
+ * Revoke one key value at its provider: through the adapter with its remote id
+ * (or one located from the value), else say exactly where and what to delete.
+ * A ProviderError propagates — callers leave the vault untouched when it does.
+ */
+export async function revokeRemote(v: Vault, key: KeyRecord, opts: { dryRun?: boolean } = {}): Promise<RemoteRevoke> {
+  const provider = providerById(v, key.providerId);
+  const adapter = provider ? adapterFor(provider) : undefined;
+  const admin = provider ? adminFor(v, provider) : null;
+  const url = provider?.consoleUrl ?? "the provider console";
+  const manual = (why: string): RemoteRevoke => ({ remote: "skipped", note: `${why} — delete the key ${consoleHint(key)} at ${url}`, console: { url, hint: consoleHint(key) } });
+  if (!adapter?.revoke) return manual(`${provider?.name ?? key.providerId} has no revoke API`);
+  if (!admin) return manual(`no admin credential for ${key.providerId}`);
+  let remoteId = key.remoteId;
+  if (!remoteId && adapter.locate) remoteId = await adapter.locate(admin.admin, key.value);
+  if (!remoteId) return manual(`don't know its id on ${provider?.name}`);
+  if (opts.dryRun) return { remote: "revoked", note: `would revoke ${remoteId} on ${provider?.name} through its admin API` };
+  await adapter.revoke(admin.admin, remoteId);
+  return { remote: "revoked", note: `revoked on ${provider?.name}` };
+}
+
 export async function revokeKey(id: string, opts: { localOnly?: boolean; keepEnv?: boolean } = {}): Promise<RevokeResult> {
   const v = readVault();
   const key = findKey(v, id);
   if (!isActive(key)) throw new UserError(`${key.id} was already revoked at ${key.revokedAt}`);
-  const provider = providerById(v, key.providerId);
   const sharers = v.keys.filter((k) => k.id !== key.id && isActive(k) && k.fingerprint === key.fingerprint).map((k) => k.project);
   let remote: RevokeResult["remote"] = "skipped";
   let remoteNote: string;
-  const adapter = provider ? adapterFor(provider) : undefined;
-  const admin = provider ? adminFor(v, provider) : null;
   if (opts.localOnly) remoteNote = "--local-only";
   else if (sharers.length > 0) remoteNote = `same value still active in ${sharers.join(", ")} — revoke those first or rotate it in the console`;
-  else if (!adapter?.revoke) remoteNote = `${provider?.name ?? key.providerId} has no revoke API — delete it at ${provider?.consoleUrl ?? "the console"}`;
-  else if (!admin) remoteNote = `no admin credential for ${key.providerId} — delete it at ${provider?.consoleUrl}`;
   else {
-    let remoteId = key.remoteId;
-    if (!remoteId && adapter.locate) remoteId = await adapter.locate(admin.admin, key.value);
-    if (!remoteId) remoteNote = `don't know its id on ${provider?.name} — delete it at ${provider?.consoleUrl}`;
-    else {
-      await adapter.revoke(admin.admin, remoteId); // a ProviderError here leaves the vault untouched
-      remote = "revoked";
-      remoteNote = `revoked on ${provider?.name}`;
-    }
+    const r = await revokeRemote(v, key); // a ProviderError here leaves the vault untouched
+    remote = r.remote;
+    remoteNote = r.note;
   }
   await mutate((vault) => {
     const k = vault.keys.find((x) => x.id === key.id);

@@ -59,6 +59,10 @@ no other project shares the value).
 | Admin credentials for minting | `keys admin list`; Sal sets one with `keys admin set <provider> --clipboard` |
 | A provider that isn't built in | `keys provider add <id> --name "<Name>" --env-var <VAR> --console-url <url>` |
 | Pick up keys sitting in .env files | `keys import` (prints a reuse report) |
+| Which Drydock app runs from which folder, and on which keys | `keys drydock` (`--refresh`); fix a wrong match with `keys drydock map <app> <folder>` |
+| Put a project's keys on its Drydock app | `keys push <project> --dry-run` first; without `--dry-run` it sets SSM env, redeploys and waits — **only when Sal asks**, it restarts production |
+| Rotate a shared key | Sal runs it himself: `keys rotate` in his terminal (or `R` on the Keys screen). You can show the plan: `keys rotate --fingerprint <fp> --dry-run` |
+| Dead shared keys (nobody active, nothing deployed) | `keys rotate --dead --dry-run` lists them; the revoke runs in Sal's screen |
 
 `--project` defaults to the project folder the shell is in. Exit codes: 0 ok,
 1 user error (read the message — it says what to do), 2 provider API error.
@@ -72,6 +76,8 @@ no other project shares the value).
   archives when an Anthropic admin key is set), Google Gemini, Groq, Replicate, and
   every custom provider.
 
-## Not yet
+## Rotating
 
-No Drydock/SSM sync (`keys push` is a next step) and no usage/spend tracking.
+The rotate walk is interactive on purpose (a confirm before every step, production apps
+redeploy). Don't drive it; point Sal at `keys rotate` and offer the `--dry-run` plan. A walk
+he quit halfway resumes where it stopped.

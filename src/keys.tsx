@@ -10,7 +10,25 @@ import { clearClipboard, readClipboard } from "./lib/keys/win32.ts";
 import { UserError } from "./lib/keys/errors.ts";
 import { findKey, readVault, reuseGroups, VAULT_PATH, type ReuseGroup } from "./lib/keys/vault.ts";
 import { DEFAULT_DAYS, getUsage } from "./lib/keys/usage/index.ts";
-import { ago, buildView, money, sparkline, units, type Money, type UsageLine, type UsageView } from "./lib/keys/usage/view.ts";
+import { ago, buildView, money, sparkline, units, type Money, type UsageView } from "./lib/keys/usage/view.ts";
+import { ddMark, deployedFolders, getDrydock, readDrydockCache, setOverride, type DrydockCache, type MappedApp } from "./lib/keys/deployed.ts";
+import { pushProject, type PushResult } from "./lib/keys/push.ts";
+import {
+  agoText,
+  createMode,
+  deadKeys,
+  planFinish,
+  revokeDead,
+  runStep,
+  sharedKey,
+  sharedKeys,
+  STEP_LABEL,
+  stepDone,
+  stepsFor,
+  type Plan,
+  type SharedKey,
+} from "./lib/keys/rotate.ts";
+import type { Vault } from "./lib/keys/vault.ts";
 import {
   adapterFor,
   addKey,
@@ -45,6 +63,18 @@ usage:
   keys env <project> [--dry-run]         write the project's active keys into its .env
   keys revoke <id> [--local-only]        revoke on the provider (when possible), mark it, drop its .env line
   keys reuse [--json]                    the same key used by more than one project
+  keys rotate                            the rotate screen: give every project sharing a key its
+                                         own, push deployed ones to Drydock, then revoke the old one
+  keys rotate --fingerprint fp [--new p,q] [--cut p,q] --dry-run
+                                         print every step the walk would take, change nothing
+  keys rotate --dead [--dry-run]         shared keys no active or deployed project uses: batch revoke
+  keys rotate --simulate                 the rotate screen with every step simulated (nothing written)
+  keys drydock [--refresh] [--json]      Drydock apps -> project folders, and which keys they run on
+  keys drydock map <app> <folder|->      pin an app to a folder ("-" = not a local project)
+  keys drydock unmap <app>               back to repo/name matching
+  keys push <project> [--app a] [--provider x] [--no-redeploy] [--dry-run]
+                                         set the project's keys in its Drydock env, Apply + redeploy,
+                                         and follow the deploy until it succeeds or fails
   keys usage [--project p] [--provider x] [--days n] [--refresh] [--json]
                                          spend per project, most recent first (cached 15 min;
                                          a key shared by N projects shows as shared, never one's)
@@ -78,6 +108,10 @@ const BOOL_FLAGS = new Set([
   "help",
   "no-open",
   "refresh",
+  "no-redeploy",
+  "dead",
+  "simulate",
+  "override",
 ]);
 const MULTI_FLAGS = new Set(["alias", "meta"]);
 
@@ -152,12 +186,18 @@ function keyLine(k: KeyView): string {
   return `  ${k.providerId.padEnd(11)} ${k.id}  fp ${k.fingerprint}  ${state.padEnd(9)} ${where}${label}`;
 }
 
-function printKeys(keys: KeyView[]): void {
+/** Folders deployed on Drydock, from the cache (fetched once if there's none yet). */
+async function deployedMap(v: Vault): Promise<Map<string, MappedApp[]>> {
+  const { cache } = await getDrydock(v, { cacheOnly: readDrydockCache() !== null });
+  return deployedFolders(cache);
+}
+
+function printKeys(keys: KeyView[], dd: Map<string, MappedApp[]>): void {
   if (keys.length === 0) return out("no keys (keys import scans every project's .env; keys new <provider> makes one)");
   let last = "";
   for (const k of keys) {
     if (k.project !== last) {
-      out(k.project);
+      out(`${k.project}${ddMark(dd, k.project)}`);
       last = k.project;
     }
     out(keyLine(k));
@@ -165,10 +205,10 @@ function printKeys(keys: KeyView[]): void {
   }
 }
 
-function printReuse(groups: ReuseGroup[]): void {
+function printReuse(groups: ReuseGroup[], dd: Map<string, MappedApp[]>): void {
   if (groups.length === 0) return out("no key is shared between projects");
-  out(`${groups.length} key${groups.length === 1 ? "" : "s"} shared between projects:`);
-  for (const g of groups) out(`  ⚠ ${g.providerId.padEnd(11)} fp ${g.fingerprint}  ${g.projects.length} projects: ${g.projects.join(", ")}`);
+  out(`${groups.length} key${groups.length === 1 ? "" : "s"} shared between projects ([dd] = deployed on Drydock):`);
+  for (const g of groups) out(`  ⚠ ${g.providerId.padEnd(11)} fp ${g.fingerprint}  ${g.projects.length} projects: ${g.projects.map((p) => `${p}${ddMark(dd, p)}`).join(", ")}`);
 }
 
 function printEnv(r: EnvWriteResult, dryRun: boolean): void {
@@ -201,13 +241,19 @@ function usageRow(label: string, cells: string[], tail: string, indent = ""): st
   return `${indent}${label.length > 44 - indent.length ? `${label.slice(0, 43 - indent.length)}…` : label.padEnd(44 - indent.length)} ${d24.padStart(10)} ${today.padStart(10)} ${win.padStart(10)}  ${spark.padEnd(9)} ${tail}`;
 }
 
-function printUsage(v: UsageView, detail: boolean): void {
+function printUsage(v: UsageView, detail: boolean, dd: Map<string, MappedApp[]>): void {
   out(`usage · last ${v.days} days · fetched ${ago(v.fetchedAt)} · 24h is estimated from UTC day buckets`);
   out(usageRow("", ["24h", "today", `${v.days}d`, `last ${v.days}d`], ""));
   if (v.lines.length === 0) out("  nothing reported for this window");
   for (const l of v.lines) {
     const marks = [l.allocated ? "allocated" : "", l.weekToDate ? "week-to-date" : "", l.lastUsedAt ? `used ${ago(l.lastUsedAt)}` : ""].filter(Boolean).join(", ");
-    const label = l.kind === "shared" ? `⚠ ${l.label}` : l.label;
+    const marked =
+      l.kind === "project"
+        ? `${l.label}${ddMark(dd, l.label)}`
+        : l.kind === "shared"
+          ? `shared × ${l.projects.length}: ${l.projects.map((p) => `${p}${ddMark(dd, p)}`).join(", ")}`
+          : l.label;
+    const label = l.kind === "shared" ? `⚠ ${marked}` : marked;
     out(usageRow(label, usageCells(l.usd, l.units), `${l.providers.join("+")}${marks ? `  (${marks})` : ""}`));
     if (detail || l.kind === "shared")
       for (const k of l.keys) {
@@ -224,6 +270,117 @@ function printUsage(v: UsageView, detail: boolean): void {
     out(`  ${pr.id.padEnd(11)} ${state}${pr.message ? ` — ${pr.message}` : ""}`);
   }
 }
+
+function printDrydock(c: DrydockCache, v: Vault, error: string | undefined): void {
+  const readable = c.apps.filter((a) => a.env !== null).length;
+  out(`drydock · ${c.apps.length} apps · fetched ${ago(c.fetchedAt)}${error ? ` (portal down: ${error})` : ""} · env read for ${readable}/${c.apps.length} (values come back; fingerprinted, never stored)`);
+  const groups = new Map(reuseGroups(v).map((g) => [g.fingerprint, g]));
+  const varNames = new Map(v.providers.flatMap((pr) => [pr.envVar, ...pr.aliases].map((n) => [n, pr.id] as const)));
+  for (const a of [...c.apps].sort((x, y) => (x.folder ? 0 : 1) - (y.folder ? 0 : 1) || x.name.localeCompare(y.name))) {
+    const where = a.folder ? `${a.folder.padEnd(22)} ${(a.mappedBy ?? "").padEnd(8)}` : `${"— unmapped".padEnd(22)} ${"".padEnd(8)}`;
+    const keys: string[] = [];
+    for (const [name, fp] of Object.entries(a.env ?? {})) {
+      const known = fp ? v.keys.find((k) => k.fingerprint === fp) : undefined;
+      if (known) {
+        const g = groups.get(known.fingerprint);
+        const owner = g ? `⚠ shared × ${g.projects.length}` : known.project.toLowerCase() === a.folder?.toLowerCase() ? "own" : `${known.project}'s`;
+        keys.push(`${known.providerId} ${name} fp ${known.fingerprint} (${owner}${known.revokedAt ? ", REVOKED in vault" : ""})`);
+      } else if (varNames.has(name)) keys.push(`${varNames.get(name)} ${name} ${fp ? `fp ${fp} (not in vault)` : "(value unknown)"}`);
+    }
+    const env = a.env === null ? `env unreadable: ${a.envError ?? "?"}` : keys.length ? keys.join(" · ") : "no AI keys";
+    out(`  ${a.name.padEnd(16)} ${where} ${a.desired === 0 ? "[stopped] " : ""}${env}`);
+  }
+}
+
+function printPush(r: PushResult, redeploy: boolean): void {
+  for (const a of r.apps) {
+    const changed = a.sets.filter((s) => s.change !== "same");
+    out(`${a.app}: ${changed.length ? changed.map((s) => `${r.dryRun ? "would " : ""}${s.change} ${s.envVar} (${s.providerId} fp ${s.fingerprint})`).join(", ") : "already up to date"}`);
+    if (!changed.length) continue;
+    if (r.dryRun) out(redeploy ? "  would Apply + redeploy and wait for the deploy" : "  --no-redeploy: values only (a re-register is needed before the app sees a NEW var)");
+    else if (a.deploy) out(a.deploy.ok ? `  ✓ deployed ${a.deploy.taskDef} in ${a.deploy.seconds}s` : `  ✗ deploy failed after ${a.deploy.seconds}s: ${a.deploy.note}`);
+    else if (!redeploy) out("  values set; not redeployed (--no-redeploy)");
+  }
+}
+
+function resolveFp(v: Vault, arg: string): string {
+  const fps = [...new Set(v.keys.map((k) => k.fingerprint).filter((fp) => fp.startsWith(arg.toLowerCase())))];
+  if (fps.length === 1 && fps[0]) return fps[0];
+  throw new UserError(fps.length ? `"${arg}" matches ${fps.length} fingerprints` : `no key with fingerprint ${arg}`);
+}
+
+function usd(k: SharedKey): string {
+  return k.usd7 === null ? "—" : money(k.usd7);
+}
+
+function printShared(keys: SharedKey[]): void {
+  if (!keys.length) return out("no key is shared between projects");
+  out(`${keys.length} shared keys · 7d $ from the usage cache`);
+  for (const k of keys) {
+    const news = k.members.filter((m) => m.plan === "new");
+    const done = news.filter((m) => stepsFor(m).every((s) => stepDone(m.progress, s))).length;
+    const state = k.rotation ? `rotating: ${done}/${news.length} done` : k.dead ? "dead" : k.blockedBy.length ? "dead? (deployed value unknown)" : `${news.length} new · ${k.members.length - news.length} cut off`;
+    const dd = k.members.filter((m) => m.apps.length).length;
+    out(`  ⚠ ${k.providerId.padEnd(11)} fp ${k.fingerprint}  ${String(k.members.length).padStart(2)} projects${dd ? ` (${dd} [dd])` : ""}  ${usd(k).padStart(8)}  ${state}${k.strays.length ? ` · ${k.strays.length} unmapped deployed app(s)` : ""}`);
+  }
+}
+
+async function printWalk(k: SharedKey, v: Vault): Promise<void> {
+  const news = k.members.filter((m) => m.plan === "new");
+  const cut = k.members.filter((m) => m.plan === "cutoff");
+  out(`rotate ${k.provider?.name ?? k.providerId} key fp ${k.fingerprint} · shared by ${k.members.length} projects · ${usd(k)} in 7d${k.rotation ? ` · walk in progress since ${k.rotation.startedAt.slice(0, 10)}` : ""}`);
+  out(`${news.length} get a new key · ${cut.length} cut off · ${k.members.filter((m) => m.apps.length).length} deployed on Drydock`);
+  out();
+  out(`  ${"project".padEnd(24)} ${"last activity".padEnd(16)} ${"drydock".padEnd(30)} plan`);
+  for (const m of k.members) {
+    const act = m.activity.lastAt === null ? "none" : `${agoText(m.activity.lastAt)} (${m.activity.source})`;
+    const dd = m.apps.length ? m.apps.map((a) => `${a.name}${a.how === "uses" ? " (uses it)" : a.how === "maybe" ? " (maybe)" : " (not this key)"}`).join(", ") : "—";
+    out(`  ${m.project.padEnd(24)} ${act.padEnd(16)} ${dd.padEnd(30)} ${m.plan === "new" ? "new key" : "cut off"}${m.plan !== m.defaultPlan ? " (changed)" : ""}`);
+  }
+  for (const s of k.strays)
+    out(`  ⚠ Drydock app ${s.app.name} ${s.how === "uses" ? "uses" : "might use"} this key and maps to no member folder — map it (keys drydock map ${s.app.name} <folder>) or it blocks the revoke`);
+  out();
+  out("walk (dry run — nothing is written, minted or pushed):");
+  let i = 0;
+  for (const m of news) {
+    i++;
+    const mode = createMode(v, k.fingerprint, m.project, k.providerId);
+    out(`  ${i}/${news.length} ${m.project}${mode.why ? `  (console: ${mode.why})` : ""}`);
+    let n = 0;
+    for (const step of stepsFor(m)) {
+      n++;
+      const r = stepDone(m.progress, step) ? { text: "already done" } : await runStep(k.fingerprint, m.project, step, { dryRun: true, apps: m.apps.map((a) => a.name) });
+      out(`     ${n}. ${STEP_LABEL[step].padEnd(8)} ${r.text}`);
+    }
+  }
+  out();
+  out("finish (only after every new-key project is done and verified):");
+  const plan = await planFinish(k.fingerprint, { cacheOnly: true, plans: Object.fromEntries(k.members.map((m) => [m.project, m.plan])) });
+  out(`  revoke the old key: ${plan.revoke.note}`);
+  out(
+    `  then mark ${plan.records} vault record${plan.records === 1 ? "" : "s"} revoked and remove the line from the .env of the ${plan.cutoff.length} cut-off project${plan.cutoff.length === 1 ? "" : "s"}${plan.cutoff.length ? `: ${plan.cutoff.join(", ")}` : ""}`,
+  );
+  for (const b of plan.soft) out(`  ⚠ needs an explicit override: ${b}`);
+  for (const b of plan.blockers.filter((x) => !/isn't done/.test(x))) out(`  ⚠ blocks the revoke today: ${b}`);
+}
+
+async function printDead(keys: SharedKey[], dryRun: boolean): Promise<void> {
+  if (!keys.length) return out("no dead shared keys — every shared key has an active or deployed project");
+  const clear = keys.filter((k) => k.dead);
+  const blocked = keys.filter((k) => !k.dead);
+  out(`${keys.length} dead shared keys (no project active in 30 days, no Drydock app holding it)${dryRun ? " — dry run" : ""}:`);
+  for (const k of clear) {
+    const r = await revokeDead(k.fingerprint, { dryRun: true });
+    out(`  ✕ ${k.providerId.padEnd(11)} fp ${k.fingerprint}  ${k.members.length} projects  ${usd(k).padStart(7)}  ${k.members.map((m) => m.project).join(", ")}`);
+    out(`      ${r.text}`);
+  }
+  for (const k of blocked) {
+    out(`  ⛔ ${k.providerId.padEnd(11)} fp ${k.fingerprint}  ${k.members.length} projects  ${usd(k).padStart(7)}  ${k.members.map((m) => m.project).join(", ")}`);
+    out(`      blocked until overridden: ${k.blockedBy.join("; ")}`);
+  }
+  if (!dryRun) out("\nthe batch revoke runs in the screen: keys rotate --dead (in a terminal)");
+}
+
 
 // ─── commands ────────────────────────────────────────────────────────────────
 
@@ -242,7 +399,7 @@ async function run(argv: string[]): Promise<number> {
     case "ls": {
       const keys = viewKeys(readVault(), { project: p.flags.get("project"), provider: p.flags.get("provider"), all: p.bools.has("all") });
       if (asJson) json(keys);
-      else printKeys(keys);
+      else printKeys(keys, await deployedMap(readVault()));
       return 0;
     }
 
@@ -320,14 +477,14 @@ async function run(argv: string[]): Promise<number> {
       const cache = await getUsage({ days, refresh: p.bools.has("refresh") });
       const view = buildView(cache, readVault(), { days, project: p.flags.get("project"), provider: p.flags.get("provider")?.toLowerCase() });
       if (asJson) json(view);
-      else printUsage(view, Boolean(p.flags.get("project")));
+      else printUsage(view, Boolean(p.flags.get("project")), await deployedMap(readVault()));
       return 0;
     }
 
     case "reuse": {
       const groups = reuseGroups(readVault());
       if (asJson) json(groups);
-      else printReuse(groups);
+      else printReuse(groups, await deployedMap(readVault()));
       return 0;
     }
 
@@ -345,9 +502,70 @@ async function run(argv: string[]): Promise<number> {
         for (const c of report.conflicts) out(`  ! ${c.project.padEnd(24)} ${c.providerId.padEnd(11)} fp ${c.fingerprint}  ${c.file} ${c.envVar}  (kept ${c.kept})`);
       }
       out();
-      printReuse(report.reuse);
+      printReuse(report.reuse, await deployedMap(readVault()));
       return 0;
     }
+
+    case "drydock": {
+      const sub = p.positional[1];
+      if (sub === "map" || sub === "unmap") {
+        const app = need(p, 2, "app name");
+        const folder = sub === "map" ? need(p, 3, "folder (or -)") : null;
+        await setOverride(app, folder);
+        out(sub === "map" ? `✓ ${app} → ${folder === "-" ? "not a local project" : folder}` : `✓ ${app} back to repo/name matching`);
+        return 0;
+      }
+      if (sub) throw new UserError(`unknown: keys drydock ${sub}`);
+      const v = readVault();
+      const { cache, error } = await getDrydock(v, { refresh: p.bools.has("refresh") });
+      if (!cache) throw new UserError(`can't reach Drydock: ${error ?? "no data"}`);
+      if (asJson) json(cache);
+      else printDrydock(cache, v, error);
+      return 0;
+    }
+
+    case "push": {
+      const proj = p.positional[1] ?? project(p);
+      const redeploy = !p.bools.has("no-redeploy");
+      const res = await pushProject(proj, {
+        app: p.flags.get("app"),
+        providerId: p.flags.get("provider")?.toLowerCase(),
+        redeploy,
+        dryRun: p.bools.has("dry-run"),
+        onTick: asJson ? undefined : (l) => out(`  … ${l}`),
+      });
+      if (asJson) json(res);
+      else printPush(res, redeploy);
+      return res.apps.some((a) => a.deploy && !a.deploy.ok) ? 2 : 0;
+    }
+
+    case "rotate": {
+      const dead = p.bools.has("dead");
+      const dryRun = p.bools.has("dry-run");
+      const fpArg = p.flags.get("fingerprint");
+      if (!dryRun && process.stdout.isTTY) {
+        tuiRoute = { fingerprint: fpArg ? resolveFp(readVault(), fpArg) : undefined, dead, simulate: p.bools.has("simulate") };
+        return -1;
+      }
+      const v = readVault();
+      const { cache, error } = await getDrydock(v);
+      if (error) out(`⚠ Drydock: ${error}${cache ? ` — using the cache from ${ago(cache.fetchedAt)}` : ""}`);
+      if (dead) {
+        await printDead(deadKeys(sharedKeys(v, cache)), dryRun);
+        return 0;
+      }
+      if (fpArg) {
+        const plans: Record<string, Plan> = {};
+        for (const x of (p.flags.get("new") ?? "").split(",").filter(Boolean)) plans[x] = "new";
+        for (const x of (p.flags.get("cut") ?? "").split(",").filter(Boolean)) plans[x] = "cutoff";
+        await printWalk(sharedKey(v, cache, resolveFp(v, fpArg), plans), v);
+        return 0;
+      }
+      printShared(sharedKeys(v, cache));
+      if (!dryRun) out("\nthe walk runs in the screen: keys rotate (in a terminal), or R on the Keys screen");
+      return 0;
+    }
+
 
     case "providers": {
       const v = readVault();
@@ -461,6 +679,7 @@ async function run(argv: string[]): Promise<number> {
   }
 }
 
+let tuiRoute: { fingerprint?: string; dead?: boolean; simulate?: boolean } | undefined;
 let code: number;
 try {
   code = await run(process.argv.slice(2));
@@ -476,7 +695,7 @@ if (code === -1) {
     process.exit(0);
   }
   const renderer = await createCliRenderer({ exitOnCtrlC: false, targetFps: 30 });
-  createRoot(renderer).render(<App initialRoute={{ name: "keys" }} cwd={process.cwd()} />);
+  createRoot(renderer).render(<App initialRoute={{ name: "keys", rotate: tuiRoute }} cwd={process.cwd()} />);
 } else {
   process.exit(code);
 }

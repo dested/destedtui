@@ -1,6 +1,6 @@
 # Keys — one vault for every AI API key
 
-> Status: shipped 2026-10-03 (overnight build). Spec: `plans/2026-10-03-keys.md`.
+> Status: shipped 2026-10-03 (overnight build); usage, Drydock and rotate 2026-10-04. Spec: `plans/2026-10-03-keys.md`.
 
 ## What it does
 
@@ -27,6 +27,10 @@ picker), the `keys` Claude skill (`skill/keys/SKILL.md`), and PowerShell's `Use-
 | Mint adapters (one file each) + registry | `src/lib/keys/adapters/*.ts`, `adapters/index.ts` |
 | `.env` upsert/remove + gitignore check | `src/lib/keys/envfile.ts` |
 | `.env` scanner for `keys import` | `src/lib/keys/importer.ts` |
+| Drydock client (tRPC) / app→folder map + env fingerprints / push | `src/lib/keys/drydock.ts`, `deployed.ts`, `push.ts` |
+| Rotate flow + dead-key batch / screen | `src/lib/keys/rotate.ts`, `src/screens/KeysRotate.tsx` |
+| Project activity (Claude history + reflog) / cheap auth checks | `src/lib/keys/activity.ts`, `verify.ts` |
+| Headless frames of the Keys screens | `scripts/snap-keys.tsx` |
 | Claude skill (junctioned to `~/.claude/skills/keys`) | `skill/keys/SKILL.md` |
 
 ## Data
@@ -41,6 +45,10 @@ are kept as `vault.bin.1..5`. `KEYS_VAULT_DIR` overrides the folder (tests).
   source (minted|pasted|imported), remoteId?, revokedAt?, envFile (default .env), envVar?`.
   `envFile`/`envVar` remember where an imported key really lives (`web/.env`,
   `VITE_OPENAI_API_KEY`) so `keys env` writes it back to the same place.
+- `drydock.overrides` — Drydock app → folder (`-` = not a local project).
+- `rotations[]` — `id, fingerprint, providerId, status (walking|finished|abandoned),
+  projects[{project, plan (new|cutoff), apps[], keyId?, created?, env?, pushed?, verified?{ok},
+  error?}], revoked?{remote: revoked|console, note}`. The walk's durable state.
 - `admin[]` — `providerId, value, fingerprint, createdAt, meta{}`. Never written to a `.env`.
   When the vault has none, the adapter's user env var is used (`OPENAI_ADMIN_KEY`,
   `ANTHROPIC_ADMIN_KEY`).
@@ -87,7 +95,7 @@ source, file + var, a red `⚠ same key in N projects`, and row buttons `.env` /
 Keys: `n` new/mint, `a` add from clipboard, `w` write .env, `o` console, `x` revoke
 (two-press, panel border red, status line says local-only vs remote), `i` import, `p` add
 provider, `m` admin credential from clipboard. Forms replace the list (CommandEditor
-pattern), choice fields cycle with ←/→. `u` opens the Usage view.
+pattern), choice fields cycle with ←/→. `u` opens the Usage view, `R` the rotate screen.
 
 ## Usage (2026-10-04)
 
@@ -135,9 +143,103 @@ a status line, never a failed run.
 Adding a provider: one file in `src/lib/keys/usage/` exporting a `UsageFetcher` + a line
 in `usage/index.ts`.
 
+## Drydock (2026-10-04)
+
+keys is a client of the Drydock portal's plain tRPC (`DRYDOCK_URL`, default
+`http://localhost:4400/trpc`, `src/lib/keys/drydock.ts`): `projects.list`, `projects.env.list`
+/ `env.set` / `env.applyChanges`, `projects.state`. It never touches the Drydock repo. None of
+those calls run anything on the box (ECS describe + SSM *Parameter Store* reads/writes, no
+Run Command).
+
+**App → folder** (`src/lib/keys/deployed.ts`). A manual override wins
+(`keys drydock map <app> <folder|->`, stored in the vault as `drydock.overrides`); else the
+folder whose `.git/config` origin is the app's GitHub repo (several clones → the one named
+like the app/repo); else a folder whose squashed name equals the app or repo name. Mapped
+folders get `[dd]` in `keys list`, `keys reuse`, `keys usage`, the Keys screen group headers
+and the Usage view.
+
+**Env.** `projects.env.list` returns decrypted values. They're fingerprinted inside
+`drydock.ts` and dropped; callers and the cache (`~/.destedtui/keys/drydock.json`, 15-min
+freshness) only ever see `var → fingerprint`. A var the portal names without a value is
+recorded as `null` ("present, value unknown"); an app whose env can't be read at all counts as
+*might use any key*. Both block a revoke until overridden.
+
+**`keys push <project> [--app a] [--provider x] [--no-redeploy] [--dry-run]`**
+(`src/lib/keys/push.ts`). For every Drydock app mapped to the folder: each active key goes into
+every var the app already has under one of the provider's names (or the provider's server
+name — a `VITE_` name is build-time and useless in a container). Unchanged fingerprints are
+skipped. Then `env.applyChanges` (re-registers the task def, so a NEW var reaches the
+container) and `waitForDeploy` polls `projects.state` until the new PRIMARY deployment is
+`COMPLETED` with its tasks running (ok) or `FAILED` / no deployment within a minute / 10 min
+timeout (fail, exit 2). Refuses to push on a stale cache when the portal is down.
+
+## Rotate (2026-10-04)
+
+`R` on the Keys screen, or `keys rotate` in a terminal (`src/screens/KeysRotate.tsx`,
+logic in `src/lib/keys/rotate.ts`). Replaces one shared key with one key per project, then
+revokes the shared one.
+
+**List** — every shared key (and any key a walk is still on): fingerprint, provider, N
+projects (`· M [dd]`), 7-day $ (from the usage cache; `—` = no provider-side key matched to
+this value), state. `enter` opens one; `d` is the dead-key batch.
+
+**Overview** — one row per project holding the value, plus folders whose deployed app holds it
+even though their `.env` doesn't. Columns: last activity (newest of the last prompt in
+`~/.claude/history.jsonl` — the source sal-agent's projectIndex uses — and the last commit in
+the reflog), Drydock apps (`●` holds this key, `?` var present with value unknown, `○` deployed
+on a different key), plan, step marks. Default plan: **new key** if active (< 30 days) or
+deployed, else **cut off**; `space` toggles (`*` marks a changed default). Deployed apps that
+hold the value but map to no member folder are listed as strays and block the revoke.
+
+**The walk** — `enter` (twice) starts it: a `rotations[]` record in the vault holds each
+project's plan and progress, so quitting (`esc`) and running `keys rotate` again resumes at
+the same step. One project at a time, `enter` before each step that changes anything:
+
+1. **new key** — mint where the adapter + admin credential exist; else open the console and
+   read the clipboard on the second `enter` (cleared after; `addKey`'s safeguards apply, and the
+   old shared value is refused). A project that already has its own non-shared key for the
+   provider keeps it. The project's old record is retired *locally only*
+   (`replaceLocalOnly`) — the remote revoke waits for the finish.
+2. **.env** — `writeEnv` (same file/var the old key lived in).
+3. **drydock** (deployed projects only) — `pushProject` for this provider, Apply + redeploy,
+   wait for the deploy result.
+4. **verify** — one cheap authenticated read with the new key (`src/lib/keys/verify.ts`:
+   OpenAI/Groq `GET /models`, Anthropic `GET /v1/models`, ElevenLabs `GET /v1/models`, Gemini
+   `GET /v1beta/models`, xAI `GET /v1/api-key`, OpenRouter `GET /api/v1/key`, Replicate
+   `GET /v1/account`). Status code only; a 401 is retried twice (fresh keys propagate). fal and
+   custom providers have no cheap check: marked "unverified", not failed.
+
+A failed step records the error on that project and stays the next step. Progress reads
+`3/8 done` on the walk and the overview.
+
+**Finish** — only when every "new key" project has all steps done and verify OK. `enter`
+re-reads Drydock (no stale cache), refuses while any app still holds the old fingerprint or
+an unmapped app does, and wants `O` (override) for apps whose value is unknown. Then `enter`
+twice: revoke at the provider through the adapter (remote id, or `locate` by value); without
+one, the console opens and the status line names the key (minted ones by their
+`keys-<project>` name, others by their last 4 characters), and the next `enter` confirms it's
+gone. Every remaining record of the value is marked revoked and its line removed from the
+`.env` files of the cut-off projects (only where the line still holds that value).
+
+**Dead keys** (`d`, or `keys rotate --dead`) — shared keys with no project active in 30
+days and no Drydock app holding the value. `space` picks, `a` picks every clear one, `enter`
+twice revokes them one after another with the same adapter / console fallback. A key that a
+deployed app *might* hold (value unknown) is shown `[⛔]` and can't be picked until `o`
+overrides it. A deployed project whose app demonstrably runs a different value doesn't keep a
+key alive.
+
+**Dry runs.** Every step function takes `dryRun`. `keys rotate --fingerprint <fp> [--new
+a,b] [--cut c] --dry-run` prints the overview, every step for every project and the finish;
+`keys rotate --dead --dry-run` prints the batch; `keys rotate --simulate` opens the screen with
+every step simulated and progress held in memory only. `keys rotate` with no TTY prints the
+list.
+
 ## Not built (next)
 
-- `keys push <project>` → Drydock env (SSM).
+- OpenAI has no `locate`, so imported (not minted) OpenAI keys are revoked in the console. The
+  admin API lists project api_keys with a `redacted_value` (the usage code already matches on
+  it) and can delete them — a `locate` + api-key revoke would make those one keypress.
+- The walk runs in the screen only; there is no non-interactive `keys rotate --yes`.
 - ElevenLabs keys whose name isn't the project (e.g. "temp") can't be matched — rename them
   in the ElevenLabs console to the project name, or mint replacements with `keys new`.
 - Imported keys that live in two files of one project (`web/.env` + `.env.local`) are

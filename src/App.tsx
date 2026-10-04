@@ -99,7 +99,7 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
       {route.name === "startup" && <Startup back={stack.length > 1 ? back : quit} />}
       {route.name === "term" && <Term cwd={cwd} back={stack.length > 1 ? back : quit} />}
       {route.name === "ports" && <Ports choose={chooseProject} back={stack.length > 1 ? back : quit} />}
-      {route.name === "keys" && <Keys cwd={cwd} back={stack.length > 1 ? back : quit} />}
+      {route.name === "keys" && <Keys cwd={cwd} rotate={route.rotate} back={stack.length > 1 ? back : quit} />}
       {route.name === "review" && (
         <Review cwd={cwd} scope={route.scope} autoStart={route.autoStart} back={stack.length > 1 ? back : quit} />
       )}

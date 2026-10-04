@@ -69,11 +69,54 @@ export const adminSchema = z.object({
 });
 export type AdminCredential = z.infer<typeof adminSchema>;
 
+const stepSchema = z.object({ at: z.string(), note: z.string().default("") });
+
+/** One project inside a rotation: get a new key, or be cut off when the old one is revoked. */
+export const rotationProjectSchema = z.object({
+  project: z.string().min(1),
+  plan: z.enum(["new", "cutoff"]),
+  /** Drydock apps deployed from this folder (copied in when the walk starts). */
+  apps: z.array(z.string()).default([]),
+  /** Set once the new key exists — the vault key id. */
+  keyId: z.string().optional(),
+  created: stepSchema.optional(),
+  env: stepSchema.optional(),
+  pushed: stepSchema.optional(),
+  verified: stepSchema.extend({ ok: z.boolean() }).optional(),
+  /** Last failure on this project, cleared by the next success. */
+  error: z.string().optional(),
+});
+export type RotationProject = z.infer<typeof rotationProjectSchema>;
+
+/**
+ * A rotation in progress: replace one shared key with one key per project.
+ * Lives in the vault so quitting halfway and running `keys rotate` again resumes.
+ */
+export const rotationSchema = z.object({
+  id: z.string(),
+  fingerprint: z.string(),
+  providerId: slug,
+  startedAt: z.string(),
+  updatedAt: z.string(),
+  status: z.enum(["walking", "finished", "abandoned"]),
+  projects: z.array(rotationProjectSchema),
+  /** What happened to the old key at the provider once the walk finished. */
+  revoked: stepSchema.extend({ remote: z.enum(["revoked", "console"]) }).optional(),
+});
+export type Rotation = z.infer<typeof rotationSchema>;
+
+export const drydockPrefsSchema = z.object({
+  /** Drydock app → folder under the projects root ("-" = not a local project). Wins over repo/name matching. */
+  overrides: z.record(z.string(), z.string()).default({}),
+});
+
 export const vaultSchema = z.object({
   version: z.literal(1),
   providers: z.array(providerSchema),
   keys: z.array(keySchema),
   admin: z.array(adminSchema),
+  drydock: drydockPrefsSchema.default({ overrides: {} }),
+  rotations: z.array(rotationSchema).default([]),
 });
 export type Vault = z.infer<typeof vaultSchema>;
 
@@ -87,7 +130,7 @@ export function newKeyId(): string {
 }
 
 function emptyVault(): Vault {
-  return { version: 1, providers: BUILTIN_PROVIDERS.map((p) => ({ ...p })), keys: [], admin: [] };
+  return { version: 1, providers: BUILTIN_PROVIDERS.map((p) => ({ ...p })), keys: [], admin: [], drydock: { overrides: {} }, rotations: [] };
 }
 
 /**

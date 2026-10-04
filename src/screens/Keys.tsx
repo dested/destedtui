@@ -3,6 +3,8 @@ import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { SPINNER_FRAMES, T } from "../theme.ts";
 import { Footer } from "../components/Footer.tsx";
 import { KeysUsage } from "./KeysUsage.tsx";
+import { KeysRotate } from "./KeysRotate.tsx";
+import { cachedDrydock, deployedFolders } from "../lib/keys/deployed.ts";
 import { fit, pad } from "../lib/text.ts";
 import { openInChrome } from "../lib/run.ts";
 import { clearClipboard, readClipboard } from "../lib/keys/win32.ts";
@@ -30,6 +32,8 @@ type Group = "project" | "provider";
 interface Props {
   cwd: string;
   back: () => void;
+  /** Open on the rotate screen (keys rotate). */
+  rotate?: { fingerprint?: string; dead?: boolean; simulate?: boolean };
 }
 
 interface Flash {
@@ -89,7 +93,7 @@ function load(): { vault: Vault | null; error: string | null } {
   }
 }
 
-export function Keys({ cwd, back }: Props) {
+export function Keys({ cwd, back, rotate: rotateStart }: Props) {
   // Read during the first render (DPAPI decrypt is ~1ms) — an empty first frame paints torn rows.
   const [state, setState] = useState(load);
   const [group, setGroup] = useState<Group>("project");
@@ -99,6 +103,7 @@ export function Keys({ cwd, back }: Props) {
   const [flash, setFlash] = useState<Flash | null>(null);
   const [form, setForm] = useState<Form | null>(null);
   const [usage, setUsage] = useState(false);
+  const [rotate, setRotate] = useState<Props["rotate"] | null>(rotateStart ?? null);
   const [busy, setBusy] = useState<string | null>(null);
   const [frame, setFrame] = useState(0);
   const lastIndex = useRef(0);
@@ -118,6 +123,7 @@ export function Keys({ cwd, back }: Props) {
   const keys = useMemo(() => (vault ? viewKeys(vault) : []), [vault]);
   const providers = vault?.providers ?? [];
   const shared = useMemo(() => (vault ? reuseGroups(vault) : []), [vault]);
+  const deployed = useMemo(() => deployedFolders(vault ? cachedDrydock(vault) : null), [vault]);
 
   const rows = useMemo<Row[]>(() => {
     const sorted = [...keys].sort((a, b) =>
@@ -135,15 +141,13 @@ export function Keys({ cwd, back }: Props) {
         const sub =
           group === "provider" && p && vault
             ? { mint: "mints", "no-admin": "can mint · needs admin", "console-only": "console only" }[mintAbility(vault, p)]
-            : g === here
-              ? "you are here"
-              : "";
+            : [g === here ? "you are here" : "", deployed.has(g.toLowerCase()) ? `[dd] ${(deployed.get(g.toLowerCase()) ?? []).map((a) => a.name).join(", ")}` : ""].filter(Boolean).join(" · ");
         out.push({ kind: "header", key: `h:${g}`, title: group === "provider" ? (p?.name ?? g) : g, sub });
       }
       out.push({ kind: "key", key: k.id, k });
     }
     return out;
-  }, [keys, group, providers, vault, here]);
+  }, [keys, group, providers, vault, here, deployed]);
 
   const keyRows = rows.flatMap((r, i) => (r.kind === "key" ? [{ i, k: r.k }] : []));
   const found = selectedId === null ? -1 : keyRows.findIndex((r) => r.k.id === selectedId);
@@ -287,7 +291,7 @@ export function Keys({ cwd, back }: Props) {
 
   useKeyboard((key) => {
     // The Usage view owns the keyboard while it's up (useKeyboard fires for every mounted component).
-    if (usage || key.ctrl || busy) return;
+    if (usage || rotate || key.ctrl || busy) return;
 
     if (form) {
       const f = form;
@@ -334,6 +338,8 @@ export function Keys({ cwd, back }: Props) {
         return back();
       case "u":
         return setUsage(true);
+      case "R":
+        return setRotate({});
       case "n":
         return openForm("new");
       case "a":
@@ -359,6 +365,18 @@ export function Keys({ cwd, back }: Props) {
   });
 
   if (usage) return <KeysUsage close={() => setUsage(false)} />;
+  if (rotate)
+    return (
+      <KeysRotate
+        fingerprint={rotate.fingerprint}
+        dead={rotate.dead}
+        simulate={rotate.simulate}
+        close={() => {
+          setRotate(null);
+          reload();
+        }}
+      />
+    );
 
   const spin = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "·";
   const projectsCount = new Set(keys.map((k) => k.project)).size;
@@ -455,6 +473,7 @@ export function Keys({ cwd, back }: Props) {
                   ["p", "provider"],
                   ["m", "admin"],
                   ["u", "usage"],
+                  ["R", "rotate"],
                   ["esc", "back"],
                 ]
               : [
@@ -466,6 +485,7 @@ export function Keys({ cwd, back }: Props) {
                   ["g", "group"],
                   ["i", "import"],
                   ["u", "usage"],
+                  ["R", "rotate"],
                   ["esc", "back"],
                 ]
         }

@@ -15,13 +15,13 @@ Personal dev-project TUI for dested. Four jobs: (1) a **project picker** that li
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
 - **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys` (jump straight to a screen), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
-- **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set`/`usage` for Claude sessions (the `keys` skill, source `skill/keys/`). Values never on argv or stdout — fingerprints only. Exit 0 ok / 1 user error / 2 provider API error
+- **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set`/`usage`/`push`/`drydock`/`rotate --dry-run` for Claude sessions (the `keys` skill, source `skill/keys/`). Values never on argv or stdout — fingerprints only. Exit 0 ok / 1 user error / 2 provider API error
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
 - **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff)
 - **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. Windows-only.
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
-- **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock` + `usage.json` (usage cache, no secrets, 15-min freshness); `KEYS_VAULT_DIR` overrides the folder
+- **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock` + `usage.json` (usage cache, no secrets, 15-min freshness) + `drydock.json` (Drydock apps → folders, env as var → fingerprint, 15-min freshness); `KEYS_VAULT_DIR` overrides the folder; `DRYDOCK_URL` overrides the portal (`http://localhost:4400/trpc`)
 
 ## Stack
 
@@ -82,6 +82,7 @@ src/
     Review.tsx          code review: scope picker (live badges) → streaming reviewer feed → PASS/BLOCKED report + commit gate
     Keys.tsx            the key vault: rows grouped by project/provider, ⚠ reuse badges, .env/↗/✕ row buttons, forms that replace the list
     KeysUsage.tsx       the Keys screen's Usage view (`u`): spend per owner, hottest first, sparklines, per-key detail strip
+    KeysRotate.tsx      the rotate screen (`R`): shared keys → overview/plan → confirmed walk → revoke; dead-key batch (`d`); --simulate
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all)
     ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd; kill-root chain walk, HTTP <title> probe, killServer
@@ -138,6 +139,10 @@ src/
 | Which apps the dashboard boots / their ports | `src/lib/startup.ts` → `SPECS` (folder, command, url, desktop flag) |
 | The key vault (`keys`) | `src/keys.tsx` (bin) + `src/screens/Keys.tsx` + `src/lib/keys/` — spec in `features/keys.md` |
 | Usage per project / shared key | `src/lib/keys/usage/` (fetchers + `view.ts` owner logic) + `src/screens/KeysUsage.tsx` + `printUsage` in `src/keys.tsx` — `features/keys.md` § Usage |
+| Drydock apps → folders, deployed env fingerprints, `[dd]` | `src/lib/keys/deployed.ts` (map + cache) over `drydock.ts` (tRPC client) — `features/keys.md` § Drydock |
+| `keys push` / following a deploy | `src/lib/keys/push.ts` + `waitForDeploy` in `drydock.ts` |
+| The rotate walk, finish, dead-key batch | `src/lib/keys/rotate.ts` (every step takes `dryRun`) + `src/screens/KeysRotate.tsx` — `features/keys.md` § Rotate |
+| Headless frames of the Keys screens (no tmux) | `bun scripts/snap-keys.tsx --rotate --simulate --keys "…snap"` |
 | Add a provider's usage API | one file in `src/lib/keys/usage/` exporting a `UsageFetcher` + a line in `usage/index.ts` |
 | Add a provider that can mint | one file in `src/lib/keys/adapters/` + a line in `adapters/index.ts` + `mint:` on the provider in `providers.ts` |
 | Which env var names map to a provider on import | `aliases`/`prefixes` in `src/lib/keys/providers.ts` + `classify` in `importer.ts` |
@@ -225,6 +230,8 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **The key vault never shows a value.** Lists, screen, `--json`, errors: fingerprints only. `reveal`/`values` need `--yes-print-secret` and refuse when `CLAUDECODE` is set. Keys enter via clipboard (`--clipboard`, cleared after) or `--stdin`, never argv. Provider error bodies are echoed only for non-2xx (a 2xx body may hold the key).
 - **Test the vault against a scratch dir:** `KEYS_VAULT_DIR=<scratch>/vault DESTEDTUI_PROJECTS_ROOT=<scratch>/root`. The real vault is at `~/.destedtui/keys`.
 - **Remote revoke is skipped while the same value is active in another project** — imported keys are mostly shared; revoking one remotely would break the rest.
+- **Rotation never revokes before the finish.** Steps retire a project's old record locally only; the remote revoke happens once, after every new-key project is verified and a fresh Drydock read shows no app on the old value.
+- **psmux mangles opentui diff frames** (runs of unchanged spaces collapse in `capture-pane`), so a screen you navigate *to* looks torn in tmux. Frames for review: `scripts/snap-keys.tsx` (opentui's test renderer), or launch straight into the view.
 - Windows clipboard history (Win+V) keeps its own copy of anything copied; `keys add --clipboard` clears the live clipboard only.
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 

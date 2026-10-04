@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-04 — Keys rotate + Drydock integration
+Asked: a guided rotation flow for shared keys and Drydock integration. Done: Drydock client over the portal's tRPC (apps → folders by override/repo/name, deployed env fingerprinted, never kept), `keys drydock [map|unmap]`, `keys push` (set env, Apply + redeploy, follow the deploy), `[dd]` in list/reuse/usage/screens; the rotate screen (`R` / `keys rotate`): shared-key list, per-key overview with activity/Drydock/plan, a confirmed resumable walk (mint or console+clipboard → .env → push → verify), finish with adapter revoke or console instructions, dead-key batch revoke with the unknown-value block; `--dry-run` and `--simulate`. Verified: dry runs against the real vault, resume in a scratch vault, and one live OpenAI end-to-end in a scratch vault (mint → .env → verify 200 → revoke old → 401). tsc green.
+Touched: src/lib/keys/{drydock,deployed,push,rotate,verify,activity}.ts, src/lib/keys/{vault,ops}.ts, src/screens/{KeysRotate,Keys,KeysUsage}.tsx, src/keys.tsx, src/routes.ts, src/App.tsx, scripts/snap-keys.tsx, skill/keys/SKILL.md, features/keys.md, decisions.md, cliffnotes.md, verify.md, ui.md
+
 ## 2026-10-04 — Keys usage: which projects are spending right now
 Asked: usage per key and per project in keys — today, 7d, 24h, sparkline, $ where reported, hottest first, cached ~15 min. Done: `keys usage` + the Usage view (`u` on the Keys screen), `src/lib/keys/usage/` fetchers for OpenAI (costs per api_key_id, live), ElevenLabs (workspace analytics per hashed key, live), OpenRouter (/api/v1/key per key, live), Anthropic (usage + cost report, allocated; awaiting Admin key), fal + xAI (from docs, awaiting admin keys). Shared keys show as `⚠ shared × N`, never credited to one project. Cache `~/.destedtui/keys/usage.json`, no secrets. tsc green; tmux frames at 170×44 and 100×30.
 Touched: src/lib/keys/usage/**, src/screens/KeysUsage.tsx, src/screens/Keys.tsx, src/keys.tsx, src/lib/keys/adapters/anthropic.ts, skill/keys/SKILL.md, features/keys.md, decisions.md, cliffnotes.md, verify.md, ui.md

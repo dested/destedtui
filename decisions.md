@@ -2,6 +2,20 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-04 — Keys rotate + Drydock: the builder's calls
+Sal's: a rotate screen (`R` / `keys rotate`) — overview, a confirmed step-by-step walk (create → .env → Drydock push + redeploy → verify), resumable from the vault, revoke only after every new-key project is verified, console fallback naming the key; batch revoke of dead shared keys, blocked on "deployed, value unknown" until overridden; `keys push`; `[dd]` markers; apps mapped by repo, then name, then a manual override. Mine:
+- **The override wins over repo/name matching** (the spec listed it last). A manual pin is a correction; letting an automatic match beat it would make it useless. `-` pins an app to "not a local project".
+- **Env values are read, fingerprinted and dropped inside `drydock.ts`.** The portal returns decrypted SSM values; nothing outside that module (cache, CLI, screen) ever holds one. The cache is var → fingerprint, like every other surface.
+- **"Deployed" for the plan = the folder has a Drydock app at all; "deployed" for dead = an app holds (or might hold) this value.** A project whose app demonstrably runs a different key still gets a new key by default (Sal said active or deployed), but doesn't keep a dead key alive.
+- **Folders whose app holds the value join the rotation even if their `.env` doesn't**; apps holding it with no mapped folder block the revoke. Revoking out from under a production app is the one failure this flow exists to prevent.
+- **The project's old record is retired locally at create time (`replaceLocalOnly`), the remote revoke waits for the finish.** Without it, the last `--replace` in a walk would revoke the shared key remotely before anything was verified.
+- **The finish re-reads Drydock and refuses on a portal that's down** — a 15-minute-old cache can't green-light a revoke.
+- **A project that already has its own non-shared key for the provider keeps it** (create step = "use its own") instead of being re-minted.
+- **Activity = newest of the last Claude prompt and the last reflog commit**, read from files (no `git` per folder; a TUI frame can't wait on 80 spawns). The 30-day line is Sal's. It makes Sal's agent clones (`mmo-*`) "active", so the ElevenLabs key lands at 24 new / 0 cut off; toggle them in the overview.
+- **Verify skips providers with no cheap check (fal, custom) as "unverified", not failed** — otherwise the walk could never finish for them.
+- **Console revokes name the key by its `keys-<project>` name when minted, else its last 4 characters** (Sal asked for "name or last 4"; consoles show the same tail).
+- **`--simulate` exists next to `--dry-run`**: dry-run prints and exits (for Claude and for review), simulate is the screen with every step a dry run, so the walk can be seen and captured without touching a real project.
+
 ## 2026-10-04 — Keys usage: owners, a 15-minute cache, and estimates labelled as estimates
 Sal's calls: a Usage view on the Keys screen + `keys usage`, nothing in the brief; per project today / 7d / 24h / sparkline, $ where reported, raw units otherwise, hottest first; cache in `~/.destedtui/keys/usage.json` refreshed ~15 min or on demand; build Anthropic against an Admin key he'll add. Mine:
 - **Lines are owners, not keys.** A value live in N projects lands on one `⚠ shared × N` line and is never credited to a project — splitting it would invent numbers, and the shared line is exactly the thing to untangle. Unknown provider keys and no-key usage get their own lines instead of vanishing, so the total is honest.

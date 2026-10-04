@@ -6,6 +6,7 @@ import { fit, pad } from "../lib/text.ts";
 import { readVault } from "../lib/keys/vault.ts";
 import { fetchUsage, DEFAULT_DAYS } from "../lib/keys/usage/index.ts";
 import { isStale, readUsageCache, STALE_MS, type UsageCache } from "../lib/keys/usage/cache.ts";
+import { cachedDrydock, ddMark, deployedFolders } from "../lib/keys/deployed.ts";
 import { ago, buildView, money, sparkline, units, type KeyLine, type Money, type UsageLine } from "../lib/keys/usage/view.ts";
 
 const ACCENT = T.orange;
@@ -25,6 +26,13 @@ function cells(m: Money | null, u: (Money & { unit: string }) | null): { d24: st
   if (m) return { d24: money(m.d24), today: money(m.today), win: money(m.window), spark: sparkline(m.series) };
   if (u) return { d24: units(u.d24, u.unit), today: units(u.today, u.unit), win: units(u.window, u.unit), spark: sparkline(u.series) };
   return { d24: "", today: "", win: "", spark: "" };
+}
+
+/** Owner label with [dd] on every project deployed on Drydock. */
+function ownerLabel(l: UsageLine, deployed: ReturnType<typeof deployedFolders>): string {
+  if (l.kind === "project") return `${l.label}${ddMark(deployed, l.label)}`;
+  if (l.kind === "shared") return `⚠ shared × ${l.projects.length}: ${l.projects.map((p) => `${p}${ddMark(deployed, p)}`).join(", ")}`;
+  return l.label;
 }
 
 function labelColor(l: UsageLine): string {
@@ -72,6 +80,13 @@ export function KeysUsage({ close }: Props) {
     };
   }, []);
 
+  const deployed = useMemo(() => {
+    try {
+      return deployedFolders(cachedDrydock(readVault()));
+    } catch {
+      return deployedFolders(null);
+    }
+  }, []);
   const view = useMemo(() => {
     if (!cache) return null;
     try {
@@ -150,7 +165,7 @@ export function KeysUsage({ close }: Props) {
                 >
                   <text>
                     <span fg={isSel ? ACCENT : T.dim}>{isSel ? "❯ " : "  "}</span>
-                    <span fg={labelColor(l)}>{pad(l.kind === "shared" ? `⚠ ${l.label}` : l.label, labelW)}</span>
+                    <span fg={labelColor(l)}>{pad(ownerLabel(l, deployed), labelW)}</span>
                     <span fg={hot ? T.yellow : c.d24 === "$0" || !c.d24 ? T.dim : T.fg}>{c.d24.padStart(NUM_W)}</span>
                     <span fg={T.fg}>{c.today.padStart(NUM_W)}</span>
                     <span fg={T.fg}>{c.win.padStart(NUM_W)}</span>

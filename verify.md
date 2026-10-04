@@ -73,6 +73,14 @@ Touchpoints: `src/keys.tsx`, `src/screens/Keys.tsx`, `src/lib/keys/`
 3. [cheap] TUI in tmux (`export MSYS_NO_PATHCONV=1`; the pane shell is pwsh, so set env with `$env:X='…'`): `bun run src/keys.tsx` at 170×44 and `bun run src/index.tsx --keys` at 100×30 — group headers, columns, ⚠ badges, row buttons flush right, footer. `g` regroups, `x` arms (red border + status line), `n` shows the form replacing the list, `esc` backs out.
 4. [live — spends nothing, touches the real org] `keys new openai --project <scratch>` with `OPENAI_ADMIN_KEY` set and the scratch vault → minted; probe `GET /v1/models` with the stored value from a script (print the status only) → 200; `keys revoke <id>` → "revoked on OpenAI"; probe again → 401. (Passed 2026-10-03.)
 
+### Keys rotate + Drydock [cheap → one live mint]
+Touchpoints: `src/lib/keys/{drydock,deployed,push,rotate,verify,activity}.ts`, `src/screens/KeysRotate.tsx`
+1. [cheap, read-only portal] `keys drydock --refresh` → every app with its folder + "repo/name/override" or `— unmapped`, and the AI keys in its env as provider + fp + owner (`⚠ shared × N`, `own`, `<project>'s`, `not in vault`). `keys push <deployed project> --dry-run` → "already up to date" or "would update VAR (fp …)". Never run `push` without `--dry-run` against a real project.
+2. [cheap] `keys rotate --dry-run` (list), `keys rotate --fingerprint <fp> --dry-run` (overview + every step + finish), `keys rotate --dead --dry-run`. Nothing in the vault changes (`vault.bin` mtime).
+3. [cheap] Frames: `bun scripts/snap-keys.tsx --fp <fp> --simulate --keys "wait1500 snap enter enter wait300 enter … snap tab snap"` and `--rotate --simulate --keys "wait1500 snap d snap a snap"`, at `--size 170x44` and `100x30`.
+4. [cheap] Resume: scratch vault + root, two folders sharing a fake groq key, `startRotation` + `runStep(create, {clipboard: <fake>})` from a script; a new process's `keys rotate --fingerprint … --dry-run` shows "walk in progress" and step 1 "already done"; the walk view opens on `.env`.
+5. [live — one OpenAI service account, no Drydock writes] Scratch vault + root (`rot-alpha`, `rot-beta`): `keys new openai --project rot-alpha`, copy the record to rot-beta from a script, `writeEnv`. snap-keys without `--simulate`: `space` (alpha → new key), `enter enter`, `enter` ×3 (mint, .env, verify OK), `enter` (finish plan), `enter enter` → "old key revoked on OpenAI · 1 records retired · .env lines removed in rot-beta". Probe statuses only: old 401, new 200; then `keys revoke <new>` → 401. (Passed 2026-10-04.)
+
 ### Keys usage [cheap — read-only provider calls]
 Touchpoints: `src/lib/keys/usage/`, `src/screens/KeysUsage.tsx`, `printUsage` in `src/keys.tsx`
 1. `keys usage --refresh` → table sorted by 24h, `⚠ shared × N` lines in red-flag form, a status line per provider (openai/elevenlabs/openrouter ✓ per key; anthropic/xai/fal "needs admin key" until set; gemini/groq/replicate "no usage API").
