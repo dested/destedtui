@@ -41,7 +41,7 @@ No dollar figures are stored. `CLAUDE_PROJECTS_DIR` overrides the source folder.
   skipped, a grown one is read from its saved offset, and a shrunk one is reparsed.
 - It rescans every 2 minutes while open, and the `↻ rescan` button rescans now.
 - **Everything is a button.** An action bar under the detail strip holds the view's
-  controls; `↻ rescan` and `← back` sit flush right. Keys (`1-4`, `d`, `s`, `w`, `/`,
+  screen-level controls; `↻ rescan` and `← back` sit flush right. Row actions sit on the row. Keys (`1-4`, `d`, `s`, `w`, `/`,
   `g`, `r`) still work as silent aliases, but the footer only advertises click,
   ↑↓, enter and esc. Actions that don't fit a narrow terminal drop off the end.
 - **A message is counted once.** Claude Code writes one line per content block, all
@@ -63,8 +63,8 @@ No dollar figures are stored. `CLAUDE_PROJECTS_DIR` overrides the source folder.
   local days. It filters every view.
 - **1 projects**: cost, tokens, sessions, active days, active time, a daily sparkline
   (14–30 days depending on width), last used, and the top two models by cost share.
-  Bar: a `sort cost | recent | active` segmented control, `≡ sessions`, `↪ open folder`
-  (cds there). Enter or a row click opens that project's sessions.
+  Bar: a `sort cost | recent | active` segmented control. Each row ends in a `↪` button that
+  cds to the project. Enter or a row click opens that project's sessions.
 - **2 timeline**: rows are projects by cost; columns are days (1–4 cells wide) or, with
   `show days | weeks` set to weeks, Monday-start weeks (up to 12 cells, the first and
   last clipped to the range), sized to fill the panel. A cell is `·` when nothing
@@ -72,15 +72,15 @@ No dollar figures are stored. `CLAUDE_PROJECTS_DIR` overrides the source folder.
   move the column cursor, `« 7d`/`7d »` (`4w` in weeks) jump, and the grid scrolls to
   keep it in view. The detail strip shows that project-day or project-week: cost,
   active time, sessions touching it, their titles, and the whole day's/week's total.
-  `≡ sessions` (or enter) shows those sessions; a cell click moves the cursor.
+  A cell click moves the cursor; clicking the cursor cell again (or enter) shows those sessions.
 - **3 sessions**: newest activity first, with last active, active time, project, AI
   title, cost, tokens and subagent count. `⌕ filter` types a filter by title, project or
   id prefix; `✕ clear filter` drops it and any drill-down scope (project, day or week).
-  `▶ resume` (or the row's `▶`, or enter) resumes it: the TUI quits, cds to the session's cwd and runs
+  The row's `▶` (or enter) resumes it: the TUI quits, cds to the session's cwd and runs
   `claude --resume <id>`. esc clears a filter before it leaves the screen.
 - **4 days**: newest first, with cost, active time, sessions, tokens and projects by
-  cost; the detail strip lists every project with its active time. `≡ sessions` or a
-  row click shows that day's sessions.
+  cost; the detail strip lists every project with its active time. A row click shows that
+  day's sessions.
 - Claude Code's own background Haiku calls (titles and the like) never reach a
   transcript, so mixed sessions read ~5% under its `cost-state` total. Single-model
   sessions match it to the cent.

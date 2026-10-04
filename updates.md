@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-04 — Buttons over letter keys: Localhost, Keys, Keys usage, Rotate, Terminals
+Asked: the same button treatment for the other screens. Done: shared `components/ActionBar.tsx` (btn / seg); Localhost bar (node+bun | all, sort) + filter row + copy/cd in the detail pane; Keys bar (new, paste, usage, rotate, import, group, provider, admin) + form go/cancel + clickable fields and ‹ › choices; Rotate's bar drives its keyboard state machine (one code path, arming intact) + row clicks (open, pick, plan, ⛔ override); Usage refresh/back; Terminals back button, clickable note, button empty state. Fixed my own bug from the previous entry: row actions sat in the Claude usage bar, where hover-select retargets them — now on the row (`↪`), and a second click on the timeline cursor cell drills in. Footers cut to click/↑↓/enter/esc. tsc green; clicks verified headless (rotate in simulate).
+Touched: src/components/ActionBar.tsx, src/screens/{ClaudeUsage,Ports,Keys,KeysUsage,KeysRotate,Term}.tsx, scripts/snap-claude.tsx, ui.md, cliffnotes.md, features/keys.md, features/claude-usage.md, verify.md
+
 ## 2026-10-04 — Claude usage: weeks on the timeline, every toggle a button
 Asked: a weekly toggle, then "buttons for things, not letter toggles". Done: timeline `show days | weeks` (Monday-start weeks, sessions drill-down scoped to the week); an action bar per view (sort segmented control, ◀ ▶ « », sessions, resume, filter, clear filter, open folder, rescan, back), keys kept as silent aliases, footer cut to click/↑↓/enter/esc. snap-claude gained `click:<label>`. tsc green; clicks verified headless at 120×34 and 100×30.
 Touched: src/screens/ClaudeUsage.tsx, scripts/snap-claude.tsx, features/claude-usage.md, ui.md, verify.md

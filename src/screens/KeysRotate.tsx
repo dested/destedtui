@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { SPINNER_FRAMES, T } from "../theme.ts";
 import { Footer, type Hint } from "../components/Footer.tsx";
+import { ActionBar, btn, seg, type BarItem } from "../components/ActionBar.tsx";
 import { fit, pad } from "../lib/text.ts";
 import { clearClipboard, readClipboard } from "../lib/keys/win32.ts";
 import { readVault, type Vault } from "../lib/keys/vault.ts";
@@ -42,6 +43,13 @@ interface Props {
   dead?: boolean;
   /** Every step is a dry run; progress lives only in memory (keys rotate --simulate). */
   simulate?: boolean;
+}
+
+/** The subset of a key event the handler reads — buttons synthesize these. */
+interface KeyLike {
+  name?: string;
+  sequence?: string;
+  ctrl?: boolean;
 }
 
 type View = { kind: "list" } | { kind: "key"; fp: string; tab: "overview" | "walk" } | { kind: "dead" };
@@ -165,7 +173,8 @@ export function KeysRotate({ close, fingerprint, dead, simulate = false }: Props
   const sel = Math.min(selected, Math.max(0, rowCount - 1));
   const inner = Math.max(60, width - 6);
   const DETAIL = view.kind === "key" && view.tab === "walk" ? 0 : 5;
-  const visRows = Math.max(3, height - 10 - DETAIL);
+  // + 1 for the action bar
+  const visRows = Math.max(3, height - 11 - DETAIL);
   const topRow = Math.min(Math.max(Math.min(top, Math.max(0, rowCount - visRows)), sel - visRows + 1), sel);
   useEffect(() => {
     if (topRow !== top) setTop(topRow);
@@ -305,7 +314,23 @@ export function KeysRotate({ close, fingerprint, dead, simulate = false }: Props
     });
   };
 
-  useKeyboard((ev) => {
+  const pickDead = (row: SharedKey) => {
+    if (row.blockedBy.length && !overridden.has(row.fingerprint)) return say(`⛔ ${row.fingerprint}: ${row.blockedBy.join("; ")} — ⛔ override it first`, T.yellow);
+    const n = new Set(picked);
+    if (n.has(row.fingerprint)) n.delete(row.fingerprint);
+    else n.add(row.fingerprint);
+    setPicked(n);
+  };
+  const overrideDead = (row: SharedKey) => {
+    const n = new Set(overridden);
+    if (n.has(row.fingerprint)) n.delete(row.fingerprint);
+    else n.add(row.fingerprint);
+    setOverridden(n);
+  };
+
+  // The keyboard handler is the screen's state machine; every button sends it the key it stands
+  // for, so a button and its key can never disagree (arming included).
+  const handle = (ev: KeyLike) => {
     if (ev.ctrl || busy) return;
     const s = ev.sequence;
     const up = ev.name === "up";
@@ -352,22 +377,11 @@ export function KeysRotate({ close, fingerprint, dead, simulate = false }: Props
         return setSelected(0);
       }
       if (!row) return;
-      if (s === " " || ev.name === "space") {
-        if (row.blockedBy.length && !overridden.has(row.fingerprint)) return say(`⛔ ${row.fingerprint}: ${row.blockedBy.join("; ")} — o overrides`, T.yellow);
-        const n = new Set(picked);
-        if (n.has(row.fingerprint)) n.delete(row.fingerprint);
-        else n.add(row.fingerprint);
-        return setPicked(n);
-      }
-      if (s === "o" && row.blockedBy.length) {
-        const n = new Set(overridden);
-        if (n.has(row.fingerprint)) n.delete(row.fingerprint);
-        else n.add(row.fingerprint);
-        return setOverridden(n);
-      }
+      if (s === " " || ev.name === "space") return pickDead(row);
+      if (s === "o" && row.blockedBy.length) return overrideDead(row);
       if (s === "a") return setPicked(new Set(deadList.filter((d) => !d.blockedBy.length || overridden.has(d.fingerprint)).map((d) => d.fingerprint)));
       if (ev.name === "return") {
-        if (!picked.size) return say("nothing picked — space picks a key, a picks every clear one", T.yellow);
+        if (!picked.size) return say("nothing picked — click a key to pick it, or ✓ pick all clear", T.yellow);
         if (armed === null) return setArmed(Date.now() + ARM_MS);
         setArmed(null);
         return runQueue([...picked], false);
@@ -384,7 +398,7 @@ export function KeysRotate({ close, fingerprint, dead, simulate = false }: Props
       if (armed !== null) return setArmed(null);
       if (awaitClip) {
         setAwaitClip(null);
-        return say("create cancelled — enter starts it again", T.yellow);
+        return say("create cancelled — ▶ do this step starts it again", T.yellow);
       }
       setFinish(null);
       setView({ kind: "list" });
@@ -397,7 +411,7 @@ export function KeysRotate({ close, fingerprint, dead, simulate = false }: Props
       if ((s === " " || ev.name === "space") && m) return togglePlan(m);
       if (ev.name === "return") {
         if (!started) {
-          if (!news.length) return say("every project is cut off — use the dead-key batch (d on the list) instead", T.yellow);
+          if (!news.length) return say("every project is cut off — use ☠ dead keys on the list instead", T.yellow);
           if (armed === null) return setArmed(Date.now() + ARM_MS);
           setArmed(null);
           return start();
@@ -416,7 +430,9 @@ export function KeysRotate({ close, fingerprint, dead, simulate = false }: Props
     }
     // walk
     if (ev.name === "return") return next ? doStep() : doFinish();
-  });
+  };
+  useKeyboard(handle);
+  const press = (name: string, sequence = "") => () => handle({ name, sequence });
 
   // --- render ------------------------------------------------------------------
   const spin = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "·";
@@ -428,12 +444,43 @@ export function KeysRotate({ close, fingerprint, dead, simulate = false }: Props
     : armed !== null
       ? { text: armedText(view, k, finish, picked.size, simulate), color: T.red }
       : awaitClip
-        ? { text: `copy the new ${k?.provider?.name ?? ""} key named "${awaitClip.name}", then press enter — keys reads the clipboard and clears it · esc cancels`, color: T.cyan }
+        ? { text: `copy the new ${k?.provider?.name ?? ""} key named "${awaitClip.name}", then ⧉ read clipboard — keys reads it and clears it`, color: T.cyan }
         : queue?.awaiting
-          ? { text: `delete ${queue.awaiting} in the console, then enter · s skips it · esc stops the batch`, color: T.cyan }
+          ? { text: `delete ${queue.awaiting} in the console, then ✓ deleted it`, color: T.cyan }
           : lastLog && !(view.kind === "key" && view.tab === "walk")
             ? lastLog
             : { text: simulate ? "SIMULATE — every step is a dry run; nothing is minted, written, pushed or revoked" : cacheLine(cache, ddError), color: simulate ? T.yellow : T.dim };
+
+  const isArmed = armed !== null;
+  const actions: BarItem[] = [];
+  let backLabel = "← back";
+  if (view.kind === "list") {
+    actions.push(btn("☠ dead keys", T.red, press("d", "d")), btn("↻ re-read Drydock", T.cyan, press("D", "D")));
+  } else if (view.kind === "dead") {
+    if (queue?.awaiting) {
+      actions.push(btn("✓ deleted it", T.green, press("return")), btn("skip", T.yellow, press("s", "s")));
+      backLabel = "■ stop the batch";
+    } else {
+      actions.push(
+        btn(isArmed ? `⚠ confirm: revoke ${picked.size}` : `✕ revoke picked (${picked.size})`, T.red, press("return")),
+        btn("✓ pick all clear", T.green, press("a", "a")),
+        btn("↻ re-read Drydock", T.cyan, press("D", "D")),
+      );
+    }
+  } else if (k) {
+    const tabSeg = started ? [seg("", ["overview", "walk"] as const, view.tab, (t) => setView({ ...view, tab: t }))] : [];
+    if (view.tab === "overview") {
+      actions.push(btn(started ? "→ to the walk" : isArmed ? "⚠ confirm: start the walk" : "▶ start the walk", T.green, press("return")), ...tabSeg);
+      if (started && !simulate) actions.push(btn(isArmed ? "⚠ confirm: abandon" : "✕ abandon walk", T.red, press("X", "X")));
+    } else {
+      const label = awaitClip ? "⧉ read clipboard" : next ? "▶ do this step" : isArmed ? "⚠ confirm: revoke old key" : "✕ revoke the old key";
+      actions.push(btn(label, next || awaitClip ? T.green : T.red, press("return")), ...tabSeg);
+      backLabel = awaitClip ? "✕ cancel" : "⏸ pause";
+    }
+    actions.push(seg("override", ["off", "on"] as const, override ? "on" : "off", (v) => setOverride(v === "on")));
+  }
+  if (isArmed) backLabel = "✕ cancel";
+  const trailing: BarItem[] = [btn(backLabel, T.dim, press("escape"))];
 
   return (
     <box style={{ flexGrow: 1, flexDirection: "column" }}>
@@ -455,19 +502,61 @@ export function KeysRotate({ close, fingerprint, dead, simulate = false }: Props
         }}
       >
         {view.kind === "list" ? (
-          <ListView all={all} sel={sel} topRow={topRow} visRows={visRows} width={inner} onHover={setSelected} simulate={simulate} />
+          <ListView
+            all={all}
+            sel={sel}
+            topRow={topRow}
+            visRows={visRows}
+            width={inner}
+            onHover={setSelected}
+            onPress={(i) => {
+              const hit = all[i];
+              if (hit && !busy) open(hit.fingerprint);
+            }}
+            simulate={simulate}
+          />
         ) : view.kind === "dead" ? (
-          <DeadView rows={deadList} sel={sel} topRow={topRow} visRows={visRows} width={inner} picked={picked} overridden={overridden} onHover={setSelected} />
+          <DeadView
+            rows={deadList}
+            sel={sel}
+            topRow={topRow}
+            visRows={visRows}
+            width={inner}
+            picked={picked}
+            overridden={overridden}
+            onHover={setSelected}
+            onPick={(row) => {
+              if (!busy && !queue?.awaiting) pickDead(row);
+            }}
+            onOverride={(row) => {
+              if (!busy && !queue?.awaiting) overrideDead(row);
+            }}
+          />
         ) : !k ? (
           <text fg={T.red}>{pad(`✗ ${typeof key === "string" ? key : "loading"}`, inner)}</text>
         ) : view.tab === "overview" ? (
-          <OverviewView k={k} sel={sel} topRow={topRow} visRows={visRows} width={inner} started={started} done={done} doneCount={doneCount} newCount={news.length} onHover={setSelected} />
+          <OverviewView
+            k={k}
+            sel={sel}
+            topRow={topRow}
+            visRows={visRows}
+            width={inner}
+            started={started}
+            done={done}
+            doneCount={doneCount}
+            newCount={news.length}
+            onHover={setSelected}
+            onPress={(m) => {
+              if (!busy) togglePlan(m);
+            }}
+          />
         ) : (
           <WalkView k={k} width={inner} rows={visRows + 2} done={done} doneCount={doneCount} newCount={news.length} next={next} awaitClip={awaitClip !== null} finish={finish} override={override} log={log} simulate={simulate} />
         )}
+        <ActionBar width={inner} items={actions} trailing={trailing} />
         <text fg={status.color}>{pad(status.text, inner)}</text>
       </box>
-      <Footer hints={hints(view, started, Boolean(next), queue?.awaiting ?? null, width)} />
+      <Footer hints={hints(view)} />
     </box>
   );
 }
@@ -480,29 +569,15 @@ function cacheLine(c: DrydockCache | null, err: string | null): string {
 
 function armedText(view: View, k: SharedKey | null, finish: Finish, picked: number, simulate: boolean): string {
   const sim = simulate ? " (simulated)" : "";
-  if (view.kind === "dead") return `⚠ revoke ${picked} dead key${picked === 1 ? "" : "s"} at their providers and retire them everywhere${sim} — enter again`;
-  if (view.kind === "key" && view.tab === "walk" && finish?.kind === "plan") return `⚠ revoke the old ${k?.provider?.name ?? ""} key ${k?.fingerprint ?? ""} for good${sim} — enter again`;
-  if (view.kind === "key" && view.tab === "overview" && k?.rotation) return `⚠ abandon this walk? keys already made stay; the old key is untouched — X again`;
-  return `⚠ start the walk for ${k?.fingerprint ?? ""}${sim}: plans are saved in the vault, every step still asks first — enter again`;
+  if (view.kind === "dead") return `⚠ revoke ${picked} dead key${picked === 1 ? "" : "s"} at their providers and retire them everywhere${sim} — press again to confirm`;
+  if (view.kind === "key" && view.tab === "walk" && finish?.kind === "plan") return `⚠ revoke the old ${k?.provider?.name ?? ""} key ${k?.fingerprint ?? ""} for good${sim} — press again to confirm`;
+  if (view.kind === "key" && view.tab === "overview" && k?.rotation) return `⚠ abandon this walk? keys already made stay; the old key is untouched — press again to confirm`;
+  return `⚠ start the walk for ${k?.fingerprint ?? ""}${sim}: plans are saved in the vault, every step still asks first — press again to confirm`;
 }
 
-function hints(view: View, started: boolean, hasNext: boolean, awaiting: string | null, width: number): Hint[] {
-  if (view.kind === "list") return [["↑↓", "select"], ["enter", "open"], ["d", "dead keys"], ["D", "re-read Drydock"], ["esc", "back"]];
-  if (view.kind === "dead")
-    return awaiting
-      ? [["enter", "deleted it"], ["s", "skip"], ["esc", "stop"]]
-      : [["↑↓", "select"], ["space", "pick"], ["a", "pick all clear"], ["o", "override block"], ["enter", "revoke picked"], ["esc", "back"]];
-  if (view.tab === "overview")
-    return [
-      ["↑↓", "select"],
-      ["space", "new key / cut off"],
-      ["enter", started ? "to the walk" : "start the walk"],
-      ...(started ? ([["tab", "walk"]] satisfies Hint[]) : []),
-      ...(started && width >= 120 ? ([["X", "abandon"]] satisfies Hint[]) : []),
-      ["O", "override"],
-      ["esc", "back"],
-    ];
-  return [["enter", hasNext ? "do this step" : "revoke the old key"], ["tab", "overview"], ["O", "override"], ["esc", "pause (resumable)"]];
+function hints(view: View): Hint[] {
+  if (view.kind === "key" && view.tab === "walk") return [["click", "anything"], ["enter", "the first button"], ["esc", "pause (resumable)"]];
+  return [["click", "anything"], ["↑↓", "select"], ["enter", "the first button"], ["esc", "back"]];
 }
 
 // ─── views ───────────────────────────────────────────────────────────────────
@@ -511,8 +586,27 @@ const FP_W = 14;
 const PROV_W = 12;
 const N_W = 16;
 const USD_W = 10;
+const OVR_W = 15; // " ↺ un-override "
 
-function ListView({ all, sel, topRow, visRows, width, onHover, simulate }: { all: SharedKey[]; sel: number; topRow: number; visRows: number; width: number; onHover: (i: number) => void; simulate: boolean }) {
+function ListView({
+  all,
+  sel,
+  topRow,
+  visRows,
+  width,
+  onHover,
+  onPress,
+  simulate,
+}: {
+  all: SharedKey[];
+  sel: number;
+  topRow: number;
+  visRows: number;
+  width: number;
+  onHover: (i: number) => void;
+  onPress: (i: number) => void;
+  simulate: boolean;
+}) {
   const rotating = all.filter((k) => k.rotation).length;
   const deadN = all.filter((k) => k.dead || k.blockedBy.length).length;
   const left = `${all.length} shared keys${rotating ? ` · ${rotating} rotating` : ""} · ${deadN} dead`;
@@ -544,7 +638,7 @@ function ListView({ all, sel, topRow, visRows, width, onHover, simulate }: { all
                   : `${newN} new key · ${k.members.length - newN} cut off`;
             const color = k.rotation ? T.cyan : k.dead || k.blockedBy.length ? T.dim : T.fg;
             return (
-              <box key={k.fingerprint} style={{ flexDirection: "row", height: 1, width, backgroundColor: isSel ? T.selectionBg : T.panel }} onMouseOver={() => onHover(idx)}>
+              <box key={k.fingerprint} style={{ flexDirection: "row", height: 1, width, backgroundColor: isSel ? T.selectionBg : T.panel }} onMouseOver={() => onHover(idx)} onMouseDown={() => onPress(idx)}>
                 <text>
                   <span fg={isSel ? ACCENT : T.dim}>{isSel ? "❯ " : "  "}</span>
                   <span fg={isSel ? T.cyan : T.dim}>{pad(k.fingerprint, FP_W)}</span>
@@ -600,6 +694,7 @@ function OverviewView({
   doneCount,
   newCount,
   onHover,
+  onPress,
 }: {
   k: SharedKey;
   sel: number;
@@ -611,6 +706,7 @@ function OverviewView({
   doneCount: number;
   newCount: number;
   onHover: (i: number) => void;
+  onPress: (m: Member) => void;
 }) {
   const cut = k.members.length - newCount;
   const left = `${k.provider?.name ?? k.providerId} · shared by ${k.members.length} · ${usd(k)} in 7d · ${newCount} new key · ${cut} cut off`;
@@ -632,7 +728,7 @@ function OverviewView({
           const dd = m.apps.length ? m.apps.map((a) => `${a.name}${a.how === "uses" ? " ●" : a.how === "maybe" ? " ?" : " ○"}`).join(" ") : "—";
           const failed = Boolean(m.progress?.error);
           return (
-            <box key={m.project} style={{ flexDirection: "row", height: 1, width, backgroundColor: isSel ? T.selectionBg : T.panel }} onMouseOver={() => onHover(idx)}>
+            <box key={m.project} style={{ flexDirection: "row", height: 1, width, backgroundColor: isSel ? T.selectionBg : T.panel }} onMouseOver={() => onHover(idx)} onMouseDown={() => onPress(m)}>
               <text>
                 <span fg={isSel ? ACCENT : T.dim}>{isSel ? "❯ " : "  "}</span>
                 <span fg={T.fg}>{pad(m.project, PROJ_W)}</span>
@@ -769,6 +865,8 @@ function DeadView({
   picked,
   overridden,
   onHover,
+  onPick,
+  onOverride,
 }: {
   rows: SharedKey[];
   sel: number;
@@ -778,10 +876,12 @@ function DeadView({
   picked: Set<string>;
   overridden: Set<string>;
   onHover: (i: number) => void;
+  onPick: (k: SharedKey) => void;
+  onOverride: (k: SharedKey) => void;
 }) {
   const clear = rows.filter((r) => !r.blockedBy.length).length;
   const left = `${rows.length} dead shared keys · ${clear} clear · ${rows.length - clear} blocked · ${picked.size} picked`;
-  const projW = Math.max(10, width - 2 - 4 - FP_W - PROV_W - 4 - USD_W - 2);
+  const projW = Math.max(10, width - 2 - 4 - FP_W - PROV_W - 4 - USD_W - 2 - OVR_W);
   const cur = rows[sel];
   return (
     <>
@@ -797,7 +897,7 @@ function DeadView({
             const blocked = k.blockedBy.length > 0 && !overridden.has(k.fingerprint);
             const box = picked.has(k.fingerprint) ? "[x]" : blocked ? "[⛔]" : "[ ]";
             return (
-              <box key={k.fingerprint} style={{ flexDirection: "row", height: 1, width, backgroundColor: isSel ? T.selectionBg : T.panel }} onMouseOver={() => onHover(idx)}>
+              <box key={k.fingerprint} style={{ flexDirection: "row", height: 1, width, backgroundColor: isSel ? T.selectionBg : T.panel }} onMouseOver={() => onHover(idx)} onMouseDown={() => onPick(k)}>
                 <text>
                   <span fg={isSel ? ACCENT : T.dim}>{isSel ? "❯ " : "  "}</span>
                   <span fg={picked.has(k.fingerprint) ? T.red : blocked ? T.yellow : T.dim}>{pad(box, 4)}</span>
@@ -808,6 +908,19 @@ function DeadView({
                   <span>{"  "}</span>
                   <span fg={T.dim}>{pad(k.members.map((m) => `${m.project} (${agoText(m.activity.lastAt)})`).join(", "), projW)}</span>
                 </text>
+                {k.blockedBy.length ? (
+                  <box
+                    style={{ width: OVR_W, height: 1, flexShrink: 0, backgroundColor: T.surfaceAlt }}
+                    onMouseDown={(e) => {
+                      e.stopPropagation();
+                      onOverride(k);
+                    }}
+                  >
+                    <text fg={T.yellow}>{pad(overridden.has(k.fingerprint) ? " ↺ un-override" : " ⛔ override", OVR_W)}</text>
+                  </box>
+                ) : (
+                  <text>{" ".repeat(OVR_W)}</text>
+                )}
               </box>
             );
           })
@@ -819,7 +932,7 @@ function DeadView({
           cur
             ? [
                 { text: `${cur.provider?.name ?? cur.providerId} fp ${cur.fingerprint}: revoked at the provider where an adapter + admin key exist; otherwise the console opens with which key to delete`, color: T.fg },
-                ...(cur.blockedBy.length ? [{ text: `⛔ ${cur.blockedBy.join("; ")}${overridden.has(cur.fingerprint) ? " — overridden" : " — o overrides"}`, color: T.yellow }] : []),
+                ...(cur.blockedBy.length ? [{ text: `⛔ ${cur.blockedBy.join("; ")}${overridden.has(cur.fingerprint) ? " — overridden" : " — ⛔ override on the row lifts it"}`, color: T.yellow }] : []),
               ]
             : []
         }

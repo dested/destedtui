@@ -58,6 +58,7 @@ src/
   routes.ts             Route union type (backup/restore carry optional presets)
   theme.ts              T = Tokyo Night palette + SPINNER_FRAMES (single source of color truth)
   components/
+    ActionBar.tsx       the one-row button bar (btn / seg) screens use instead of letter shortcuts — screen-level controls only
     TerminalView.tsx    custom opentui Renderable: blits an xterm-headless cell grid via setCell (+ xterm-256 palette); wheel = scrollback / forward-to-app
     Header.tsx          ascii-font "DESTED" gradient header + cwd (leaf folder bold-teal behind ⌂, parent dim)
     Footer.tsx          keybind hint bar (Hint = [key, label])

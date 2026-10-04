@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { SPINNER_FRAMES, T } from "../theme.ts";
 import { Footer } from "../components/Footer.tsx";
+import { ActionBar, btn } from "../components/ActionBar.tsx";
 import { fit, pad } from "../lib/text.ts";
 import { readVault } from "../lib/keys/vault.ts";
 import { fetchUsage, DEFAULT_DAYS } from "../lib/keys/usage/index.ts";
@@ -103,7 +104,7 @@ export function KeysUsage({ close }: Props) {
   const inner = Math.max(60, width - 6);
   const labelW = Math.max(16, inner - 2 - 3 * NUM_W - 2 - SPARK_W - PROV_W - USED_W);
   // header 3 + panel border 2 + summary + column header + detail block + status + margins/footer 2
-  const visRows = Math.max(3, height - 10 - DETAIL_ROWS);
+  const visRows = Math.max(3, height - 11 - DETAIL_ROWS); // + the action bar
   const topRow = Math.min(Math.max(Math.min(top, Math.max(0, lines.length - visRows)), sel - visRows + 1), sel);
   useEffect(() => {
     if (topRow !== top) setTop(topRow);
@@ -148,7 +149,7 @@ export function KeysUsage({ close }: Props) {
           {typeof view === "string" ? (
             <text fg={T.red}>{pad(`✗ ${view}`, inner)}</text>
           ) : !view ? (
-            <text fg={T.dim}>{pad(busy ? "fetching usage from every provider…" : "no usage cached yet — r fetches it", inner)}</text>
+            <text fg={T.dim}>{pad(busy ? "fetching usage from every provider…" : "no usage cached yet — ↻ refresh fetches it", inner)}</text>
           ) : lines.length === 0 ? (
             <text fg={T.dim}>{pad(`nothing reported in the last ${days} days`, inner)}</text>
           ) : (
@@ -180,6 +181,7 @@ export function KeysUsage({ close }: Props) {
           )}
         </box>
         <Detail line={current} width={inner} />
+        <ActionBar width={inner} items={[btn(busy ? `${spin} fetching…` : "↻ refresh now", T.cyan, refresh)]} trailing={[btn("← back to keys", T.dim, close)]} />
         <text fg={busy ? T.yellow : error ? T.red : T.dim}>
           {pad(
             busy
@@ -195,9 +197,8 @@ export function KeysUsage({ close }: Props) {
       </box>
       <Footer
         hints={[
+          ["click", "anything"],
           ["↑↓", "select"],
-          ["r", "refresh now"],
-          ["u", "back to keys"],
           ["esc", "back"],
         ]}
       />

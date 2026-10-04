@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { SPINNER_FRAMES, T } from "../theme.ts";
+import { ActionBar, btn, seg, type BarItem } from "../components/ActionBar.tsx";
 import { Footer } from "../components/Footer.tsx";
 import { fit, pad, wrap } from "../lib/text.ts";
 import { fuzzyMatch } from "../lib/fuzzy.ts";
@@ -125,8 +126,8 @@ export function Ports({ choose, back }: Props) {
   const detailWidth = width - listWidth - 3;
   const inner = listWidth - 4; // border 2 + padding 2
   const pw = projectWidth(inner, rows);
-  // header 3 + border 2 + filter, column header, status 3 + bottom margin 1 + footer 1
-  const visRows = Math.max(3, height - 10);
+  // header 3 + border 2 + filter, column header, action bar, status 4 + bottom margin 1 + footer 1
+  const visRows = Math.max(3, height - 11);
 
   const count = rows.length;
   const found = selectedPid === null ? -1 : rows.findIndex((r) => r.server.proc.pid === selectedPid);
@@ -216,26 +217,41 @@ export function Ports({ choose, back }: Props) {
       case "c":
         return copy(current);
       case "g":
-        if (current?.server.proc.cwd) choose(current.server.proc.cwd);
-        else if (current) say("✗ can't read that process's working directory", T.red);
-        return;
+        return cdThere(current);
       case "r":
         rescan();
         return say("↻ rescanned", T.dim);
       case "s":
         return setSort((s) => SORTS[(SORTS.indexOf(s) + 1) % SORTS.length] ?? "port");
-      case "a": {
-        const next = !all;
-        setAll(next);
-        rescan(next);
-        return;
-      }
+      case "a":
+        return showAll(!all);
       case "/":
         return setTyping(true);
     }
   });
 
   const spin = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "·";
+
+  const showAll = (next: boolean) => {
+    setAll(next);
+    rescan(next);
+  };
+  const cdThere = (row: Row | null) => {
+    if (row?.server.proc.cwd) choose(row.server.proc.cwd);
+    else if (row) say("✗ can't read that process's working directory", T.red);
+  };
+  // Screen-level controls only — row actions (↗ ✕) live on the row, copy/cd in the detail pane.
+  const actions: BarItem[] = [
+    seg("", ["node+bun", "all"], all ? "all" : "node+bun", (v) => showAll(v === "all")),
+    seg("sort", SORTS, sort, setSort, { project: "proj", uptime: "up", memory: "mem" }),
+  ];
+  const trailing: BarItem[] = [
+    btn("↻ rescan", T.cyan, () => {
+      rescan();
+      say("↻ rescanned", T.dim);
+    }),
+    btn("← back", T.dim, back),
+  ];
 
   return (
     <box style={{ flexGrow: 1, flexDirection: "column" }}>
@@ -259,7 +275,17 @@ export function Ports({ choose, back }: Props) {
             backgroundColor: T.panel,
           }}
         >
-          <FilterLine width={inner} filter={filter} typing={typing} all={all} sort={sort} frame={frame} />
+          <FilterLine
+            width={inner}
+            filter={filter}
+            typing={typing}
+            frame={frame}
+            onStart={() => setTyping(true)}
+            onClear={() => {
+              setFilter("");
+              setTyping(false);
+            }}
+          />
           <text fg={T.dim}>{columnHeader(inner, pw)}</text>
           <box
             style={{ flexDirection: "column", height: visRows, width: inner, flexShrink: 0, backgroundColor: T.panel }}
@@ -289,6 +315,7 @@ export function Ports({ choose, back }: Props) {
               ))
             )}
           </box>
+          <ActionBar width={inner} items={actions} trailing={trailing} />
           <StatusLine
             width={inner}
             scan={scan}
@@ -302,7 +329,16 @@ export function Ports({ choose, back }: Props) {
           />
         </box>
         {showDetail && (
-          <Detail row={current} width={detailWidth} lan={lan} spin={spin} armed={armed} onOpen={(url) => open(current, url)} />
+          <Detail
+            row={current}
+            width={detailWidth}
+            lan={lan}
+            spin={spin}
+            armed={armed}
+            onOpen={(url) => open(current, url)}
+            onCopy={() => copy(current)}
+            onCd={() => cdThere(current)}
+          />
         )}
       </box>
       <Footer
@@ -314,29 +350,12 @@ export function Ports({ choose, back }: Props) {
                 ["enter", "keep"],
                 ["esc", "clear"],
               ]
-            : width >= 150
-              ? [
-                  ["↑↓", "select"],
-                  ["enter", "open"],
-                  ["x", "kill"],
-                  ["shift+x", "kill listener only"],
-                  ["c", "copy url"],
-                  ["g", "cd there"],
-                  ["/", "filter"],
-                  ["s", "sort"],
-                  ["a", all ? "node+bun only" : "all listeners"],
-                  ["esc", "back"],
-                ]
-              : [
-                  ["enter", "open"],
-                  ["x", "kill"],
-                  ["c", "copy"],
-                  ["g", "cd"],
-                  ["/", "filter"],
-                  ["s", "sort"],
-                  ["a", all ? "node+bun" : "all"],
-                  ["esc", "back"],
-                ]
+            : [
+                ["click", "anything"],
+                ["↑↓", "select"],
+                ["enter", "open"],
+                ["esc", armed ? "disarm" : filter ? "clear filter" : "back"],
+              ]
         }
       />
     </box>
@@ -371,33 +390,35 @@ function columnHeader(width: number, pw: number): string {
   return pad(`  ${pad("  port", PORT_W)} ${pad("project", pw)}${pad("command", cw)}${pad(" rt", RT_W)}${"up".padStart(UP_W)}${"mem".padStart(MEM_W)}`, width);
 }
 
+/** The filter row: a `⌕ filter` button, or the filter being typed with a `✕` to drop it. */
 function FilterLine({
   width,
   filter,
   typing,
-  all,
-  sort,
   frame,
+  onStart,
+  onClear,
 }: {
   width: number;
   filter: string;
   typing: boolean;
-  all: boolean;
-  sort: SortMode;
   frame: number;
+  onStart: () => void;
+  onClear: () => void;
 }) {
-  const right = `${all ? "all listeners" : "node + bun"} · by ${sort}`;
+  if (!filter && !typing) return <ActionBar width={width} items={[btn("⌕ filter", T.yellow, onStart)]} trailing={[]} />;
   const caret = typing && frame % 8 < 5 ? "▏" : " ";
-  const left = filter || typing ? `/ ${filter}` : "/ to filter";
-  const leftW = Math.max(1, width - right.length - 2);
+  const clear = btn("✕ clear", T.red, onClear);
+  const textW = Math.max(4, width - 11);
   return (
     <box style={{ flexDirection: "row", height: 1, width }}>
-      <text>
-        <span fg={typing ? T.yellow : filter ? T.fg : T.dim}>{fit(left, leftW - 1)}</span>
-        <span fg={T.yellow}>{caret}</span>
-        <span fg={T.dim}>{" ".repeat(Math.max(0, leftW - Math.min(left.length, leftW - 1) - 1))}</span>
-        <span fg={T.dim}>{`  ${right}`}</span>
-      </text>
+      <box style={{ height: 1, width: textW }} onMouseDown={onStart}>
+        <text>
+          <span fg={typing ? T.yellow : T.fg}>{fit(`/ ${filter}`, textW - 1)}</span>
+          <span fg={T.yellow}>{pad(caret, Math.max(1, textW - Math.min(filter.length + 2, textW - 1)))}</span>
+        </text>
+      </box>
+      <ActionBar width={width - textW} items={[]} trailing={[clear]} />
     </box>
   );
 }
@@ -542,6 +563,8 @@ function Detail({
   spin,
   armed,
   onOpen,
+  onCopy,
+  onCd,
 }: {
   row: Row | null;
   width: number;
@@ -549,6 +572,8 @@ function Detail({
   spin: string;
   armed: Armed | null;
   onOpen: (url: string) => void;
+  onCopy: () => void;
+  onCd: () => void;
 }) {
   const inner = width - 4;
   const panel = {
@@ -588,6 +613,7 @@ function Detail({
         <span fg={runtimeColor(s.runtime)}>{`  ${s.runtime === "other" ? exeName(s.proc.exe) : s.runtime}`}</span>
       </text>
       <text fg={p?.title ? T.fg : T.dim}>{pad(pageLine(p, spin), inner)}</text>
+      <ActionBar width={inner} items={[btn("⧉ copy url", T.cyan, onCopy), btn("↪ cd there", T.teal, onCd)]} trailing={[]} />
 
       <text fg={T.dim}>{pad("", inner)}</text>
       <text fg={T.dim}>{pad("links", inner)}</text>
@@ -654,7 +680,7 @@ function Detail({
         );
       })}
       <text fg={T.dim}>
-        {pad(s.killCount > chain.length ? `  x stops ${s.killCount} processes in this tree` : `  x stops ${s.killCount} process${s.killCount === 1 ? "" : "es"}`, inner)}
+        {pad(s.killCount > chain.length ? `  ✕ stops ${s.killCount} processes in this tree` : `  ✕ stops ${s.killCount} process${s.killCount === 1 ? "" : "es"}`, inner)}
       </text>
       {s.alsoStops.length > 0 ? (
         <text fg={T.yellow}>{pad(`  ⚠ also stops ${s.alsoStops.map((p) => `:${p}`).join(" ")} — shift+x kills just this one`, inner)}</text>

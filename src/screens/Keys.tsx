@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { SPINNER_FRAMES, T } from "../theme.ts";
 import { Footer } from "../components/Footer.tsx";
+import { ActionBar, btn, seg, type BarItem } from "../components/ActionBar.tsx";
 import { KeysUsage } from "./KeysUsage.tsx";
 import { KeysRotate } from "./KeysRotate.tsx";
 import { cachedDrydock, deployedFolders } from "../lib/keys/deployed.ts";
@@ -158,8 +159,8 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
 
   // --- geometry: explicit everywhere (ui.md, Painting) ------------------------
   const inner = Math.max(40, width - 6); // margin 2 + border 2 + padding 2
-  // header 3 + panel border 2 + summary + column header + status + bottom margin 1 + footer 1
-  const visRows = Math.max(3, height - 10);
+  // header 3 + panel border 2 + summary + column header + action bar + status + bottom margin 1 + footer 1
+  const visRows = Math.max(3, height - 11);
   const maxTop = Math.max(0, rows.length - visRows);
   const topRow = Math.min(Math.max(Math.min(top, maxTop), currentRow - visRows + 1), currentRow);
   const windowRows = rows.slice(topRow, topRow + visRows);
@@ -289,6 +290,12 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
     say(`↗ opened ${p.consoleUrl}`, T.cyan);
   };
 
+  const importAll = () =>
+    work("scanning every project's .env", async () => {
+      const r = await importKeys();
+      return `✓ scanned ${r.filesScanned} env files · ${r.imported.length} imported · ${r.known} known · ${r.conflicts.length} conflicts · ${r.reuse.length} shared`;
+    });
+
   useKeyboard((key) => {
     // The Usage view owns the keyboard while it's up (useKeyboard fires for every mounted component).
     if (usage || rotate || key.ctrl || busy) return;
@@ -357,10 +364,7 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
       case "g":
         return setGroup((g) => (g === "project" ? "provider" : "project"));
       case "i":
-        return work("scanning every project's .env", async () => {
-          const r = await importKeys();
-          return `✓ scanned ${r.filesScanned} env files · ${r.imported.length} imported · ${r.known} known · ${r.conflicts.length} conflicts · ${r.reuse.length} shared`;
-        });
+        return importAll();
     }
   });
 
@@ -379,6 +383,23 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
     );
 
   const spin = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "·";
+  // Screen-level actions only — per-key actions (.env ↗ ✕) live on the key's row.
+  const actions: BarItem[] = form
+    ? [
+        btn(form.kind === "add" || form.kind === "admin" ? "⧉ read clipboard" : "✓ go", T.green, () => submit(form)),
+        btn("✕ cancel", T.red, () => setForm(null)),
+      ]
+    : [
+        btn("+ new key", T.green, () => openForm("new")),
+        btn("⧉ paste key", T.cyan, () => openForm("add")),
+        btn("$ usage", T.yellow, () => setUsage(true)),
+        btn("↻ rotate", T.orange, () => setRotate({})),
+        btn("⇣ import .env keys", T.teal, importAll),
+        seg("group", ["project", "provider"], group, setGroup),
+        btn("+ provider", T.dim, () => openForm("provider")),
+        btn("⚿ admin key", T.dim, () => openForm("admin")),
+      ];
+  const trailing: BarItem[] = [btn("← back", T.dim, () => (form ? setForm(null) : back()))];
   const projectsCount = new Set(keys.map((k) => k.project)).size;
 
   return (
@@ -404,12 +425,28 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
         <text fg={T.dim}>{columnHeader(inner, group)}</text>
         <box style={{ flexDirection: "column", height: visRows, width: inner, flexShrink: 0, backgroundColor: T.panel }}>
           {form ? (
-            <FormPanel form={form} width={inner} height={visRows} />
+            <FormPanel
+              form={form}
+              width={inner}
+              height={visRows}
+              onFocus={(i) => setForm({ ...form, focus: i })}
+              onCycle={(i, step) =>
+                setForm({
+                  ...form,
+                  focus: i,
+                  error: null,
+                  fields: form.fields.map((x, j) => {
+                    const opts = x.options;
+                    return j === i && opts ? { ...x, value: opts[(opts.indexOf(x.value) + step + opts.length) % opts.length] ?? x.value } : x;
+                  }),
+                })
+              }
+            />
           ) : state.error ? (
             <text fg={T.red}>{pad(`✗ ${state.error}`, inner)}</text>
           ) : rows.length === 0 ? (
             <box style={{ flexDirection: "column", width: inner }}>
-              <text fg={T.dim}>{pad("No keys yet — i imports every key already sitting in a project .env; n makes a new one.", inner)}</text>
+              <text fg={T.dim}>{pad("No keys yet — ⇣ import .env keys pulls in every key already sitting in a project .env; + new key makes one.", inner)}</text>
             </box>
           ) : (
             windowRows.map((row) =>
@@ -438,6 +475,7 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
             )
           )}
         </box>
+        <ActionBar width={inner} items={actions} trailing={trailing} />
         <StatusLine
           width={inner}
           busy={busy}
@@ -455,39 +493,15 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
           form
             ? [
                 ["type", "edit"],
-                ["tab/↑↓", "field"],
-                ["←→", "choose"],
+                ["click / tab", "field"],
                 ["enter", form.kind === "add" || form.kind === "admin" ? "read clipboard" : "go"],
                 ["esc", "cancel"],
               ]
-            : width >= 140
-              ? [
-                  ["↑↓", "select"],
-                  ["n", "new / mint"],
-                  ["a", "add from clipboard"],
-                  ["w", "write .env"],
-                  ["o", "console"],
-                  ["x", "revoke"],
-                  ["g", group === "project" ? "by provider" : "by project"],
-                  ["i", "import"],
-                  ["p", "provider"],
-                  ["m", "admin"],
-                  ["u", "usage"],
-                  ["R", "rotate"],
-                  ["esc", "back"],
-                ]
-              : [
-                  ["n", "new"],
-                  ["a", "add"],
-                  ["w", ".env"],
-                  ["o", "console"],
-                  ["x", "revoke"],
-                  ["g", "group"],
-                  ["i", "import"],
-                  ["u", "usage"],
-                  ["R", "rotate"],
-                  ["esc", "back"],
-                ]
+            : [
+                ["click", "anything"],
+                ["↑↓", "select"],
+                ["esc", armed ? "disarm" : "back"],
+              ]
         }
       />
     </box>
@@ -614,7 +628,19 @@ function RowButton({ label, color, width, hot = false, onPress }: { label: strin
 
 const LABEL_W = 10;
 
-function FormPanel({ form, width, height }: { form: Form; width: number; height: number }) {
+function FormPanel({
+  form,
+  width,
+  height,
+  onFocus,
+  onCycle,
+}: {
+  form: Form;
+  width: number;
+  height: number;
+  onFocus: (i: number) => void;
+  onCycle: (i: number, step: number) => void;
+}) {
   const box = Math.min(width, 72);
   const valueW = box - 4 - LABEL_W - 1;
   return (
@@ -636,13 +662,32 @@ function FormPanel({ form, width, height }: { form: Form; width: number; height:
       >
         {form.fields.map((f, i) => {
           const active = i === form.focus;
-          const shown = f.options ? `‹ ${f.value || "·"} ›` : f.value;
+          if (f.options) {
+            // A choice: click ‹ or › to step through it, or the value to step forward.
+            const value = fit(f.value || "·", valueW - 4);
+            return (
+              <box key={f.name} style={{ flexDirection: "row", height: 1, width: box - 4 }}>
+                <text fg={T.dim}>{pad(f.label, LABEL_W)}</text>
+                <box style={{ height: 1, width: 2, backgroundColor: T.surfaceAlt }} onMouseDown={() => onCycle(i, -1)}>
+                  <text fg={T.cyan}>‹ </text>
+                </box>
+                <box style={{ height: 1, width: value.length + 2 }} onMouseDown={() => onCycle(i, 1)}>
+                  <text fg={active ? T.fg : T.dim}>{` ${value} `}</text>
+                </box>
+                <box style={{ height: 1, width: 2, backgroundColor: T.surfaceAlt }} onMouseDown={() => onCycle(i, 1)}>
+                  <text fg={T.cyan}> ›</text>
+                </box>
+              </box>
+            );
+          }
           return (
-            <text key={f.name}>
-              <span fg={T.dim}>{pad(f.label, LABEL_W)}</span>
-              <span fg={active ? T.fg : T.dim}>{pad(shown, valueW)}</span>
-              <span fg={active && !f.options ? ACCENT : T.panel}>▏</span>
-            </text>
+            <box key={f.name} style={{ height: 1, width: box - 4 }} onMouseDown={() => onFocus(i)}>
+              <text>
+                <span fg={T.dim}>{pad(f.label, LABEL_W)}</span>
+                <span fg={active ? T.fg : T.dim}>{pad(f.value, valueW)}</span>
+                <span fg={active ? ACCENT : T.panel}>▏</span>
+              </text>
+            </box>
           );
         })}
         <text>

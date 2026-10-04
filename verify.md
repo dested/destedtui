@@ -95,6 +95,7 @@ Touchpoints: `src/lib/claude/`, `src/screens/ClaudeUsage.tsx`
 3. Frames, no tmux (psmux misdraws diffed rows): `bun scripts/snap-claude.tsx --size 180x46 --keys "snap 2 snap left left snap 3 snap 4 snap d snap"` and again at `100x30` — columns aligned, timeline total column flush right, footer fits.
 4. Drill-down: `--keys "enter snap escape snap"` → sessions filtered to the top project (`▸ name` in the tab row), esc clears the filter.
 5. Buttons, with real mouse clicks (`click:<label>`, `_` = space): `--size 120x34 --keys "click:2_timeline click:weeks snap click:◀ snap click:≡_sessions snap click:✕_clear click:1_projects click:recent snap click:←_back snap"` → weekly grid, cursor moves a week, sessions scoped to that week, filter clears, sort flips to recent, back lands on the menu.
+6. Other screens' buttons: `--route ports|keys|rotate|rotate-dead|term` (the rotate routes open in simulate). E.g. `--route rotate --keys "wait500 click:<fp> click:^▶_start click:^⚠_confirm wait1500 snap"`. Never click `✓ go` / `⧉ read clipboard` / `✕` revoke on the real `keys` route.
 
 ### Core-logic smoke (no DB needed) [medium]
 Touchpoints: `src/lib/discovery.ts`, `pgurl.ts`, `zip.ts`

@@ -47,7 +47,7 @@ Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue�
 
 **Modal panels** (the add/edit form, the delete confirm) **replace the grid** — same rect, same explicit height — instead of floating over it. An overlay would leave the cards it covered painted underneath. Their fields are hand-rolled, not `<input>`s, for the same reason the search line is (below).
 
-**Buttons** are a one-row `box` with `T.surfaceAlt` background and one cell of padding either side, label in the action's own colour (`▶ dev` green, `✦ claude` purple). A button inside a clickable parent must `stopPropagation()`, and every button needs a `ctrl+<key>` twin in the footer.
+**Buttons** are a one-row `box` with `T.surfaceAlt` background and one cell of padding either side, label in the action's own colour (`▶ dev` green, `✦ claude` purple). A button inside a clickable parent must `stopPropagation()`, and every button keeps a keyboard twin — but the footer no longer lists letter twins (see Action bar).
 
 **The terminal pane** (`Term.tsx`) carries a one-line **note strip** just under its status row and above the emulator: `✎ note: <text>` (blue icon, `note:` dim, text `T.fg`), or a dim `✎ press t for a note` when empty, or the live draft with a `▏` caret in `T.yellow` while editing. It's a fixed height-1 row so it never reflows the terminal grid.
 
@@ -55,11 +55,11 @@ Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue�
 
 **Tabbed views** (claude usage): one row of ` 1 projects ` tabs on the left (active tab accent-on-`selectionBg`) and range chips on the right (active chip cyan on `surfaceAlt`), both clickable; a live filter sits between them in teal (`▸ drydock`) or yellow while typing (`/text▏`). Below: a summary line, the column header, the rows, a fixed 3-row detail strip for the selected row, and a status line.
 
-**Action bar** (claude usage): one row under the detail strip holding every toggle and action as a button — never a letter key the user has to remember. Buttons per the Buttons rule; a choice between modes is a segmented control (`sort cost recent active`: dim label, then adjacent chips, active cyan on `selectionBg`, the rest dim on `surfaceAlt`). The view's actions sit left with 2-cell gaps, `↻ rescan` / `← back` flush right; actions that don't fit drop off the end. Keys stay as silent aliases and the footer shrinks to click / ↑↓ / enter / esc.
+**Action bar** (`components/ActionBar.tsx` — claude usage, localhost, keys, keys usage, rotate): one row above the status line holding every screen-level toggle and action as a button — never a letter key the user has to remember. Built from `btn(label, color, onPress)` and `seg(label, options, value, onChange)` (a segmented control: optional dim label, adjacent chips, active cyan on `selectionBg`, the rest dim on `surfaceAlt`). Actions sit left with 2-cell gaps, back (and rescan) flush right; actions that don't fit drop off the end, so put the important ones first. **Only screen-level controls go in the bar** — sort, mode, range, rescan, a wizard's next step. Anything that acts on the selected row is a button *on the row* (or in a side detail pane, which the mouse reaches sideways): hover selects, so a mouse travelling down to the bar crosses other rows and retargets it. A two-press action arms in place (`⚠ confirm: …`, back becomes `✕ cancel`). Letter keys stay as silent aliases; the footer shrinks to click / ↑↓ / enter / esc. A filter lives in the filter row itself: a `⌕ filter` button, then the text being typed and a `✕ clear`.
 
 **Heatmap** (claude usage timeline): project label column, then one 1–4-cell column per day — or 1–12 cells per Monday-start week in weeks mode — (sized to fill the panel), then a right-aligned total. Empty day `·` in `T.border`; activity `░▒` in `T.blue`, `▓█` in `T.cyan`, on a sqrt scale so small days still show. The cursor day is a `T.surface` column (`T.border` on the selected row). Header labels `MM-DD` sit on Mondays (on every week in weeks mode).
 
-**Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), and the footer advertises both.
+**Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), but the footer only advertises click, arrows, enter and esc — never a wall of letter shortcuts (Sal, 2026-10-04: buttons, not letter toggles).
 
 ## Painting (learned the hard way)
 

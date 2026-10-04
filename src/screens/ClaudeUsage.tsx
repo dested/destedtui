@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { SPINNER_FRAMES, T } from "../theme.ts";
 import { Footer, type Hint } from "../components/Footer.tsx";
+import { ActionBar, btn, seg, type BarItem } from "../components/ActionBar.tsx";
 import { fit, pad } from "../lib/text.ts";
 import { projectsRoot } from "../lib/projects.ts";
 import { sparkline } from "../lib/keys/usage/view.ts";
@@ -345,31 +346,21 @@ export function ClaudeUsage({ back, choose }: Props) {
     ["esc", view === "sessions" && filtered ? "clear filter" : "back"],
   ];
 
-  // The action bar: every toggle and action as a button — keys are only silent aliases.
-  const selectedProject = view === "projects" ? projects[cur]?.name : view === "timeline" ? heatRows[cur]?.name : view === "sessions" ? sessions[cur]?.project : undefined;
+  // The action bar holds screen-level controls only. Row actions live on the row: hover selects,
+  // so a mouse travelling down to a bar button would cross (and retarget) other rows.
   const actions: BarItem[] = [];
   if (summary) {
-    if (view === "projects") {
-      actions.push({ kind: "seg", label: "sort", options: SORTS.map((o) => ({ label: o, active: o === sort, onPress: () => setSort(o) })) });
-      actions.push({ kind: "btn", label: "≡ sessions", color: T.cyan, onPress: enter });
-    } else if (view === "timeline") {
-      actions.push({ kind: "seg", label: "show", options: [
-        { label: "days", active: !weekly, onPress: () => setGrain(false) },
-        { label: "weeks", active: weekly, onPress: () => setGrain(true) },
-      ] });
-      actions.push({ kind: "btn", label: weekly ? "« 4w" : "« 7d", color: T.dim, onPress: () => moveCol(weekly ? -4 : -7) });
-      actions.push({ kind: "btn", label: "◀", color: T.fg, onPress: () => moveCol(-1) });
-      actions.push({ kind: "btn", label: "▶", color: T.fg, onPress: () => moveCol(1) });
-      actions.push({ kind: "btn", label: weekly ? "4w »" : "7d »", color: T.dim, onPress: () => moveCol(weekly ? 4 : 7) });
-      actions.push({ kind: "btn", label: "≡ sessions", color: T.cyan, onPress: enter });
+    if (view === "projects") actions.push(seg("sort", SORTS, sort, setSort));
+    else if (view === "timeline") {
+      actions.push(seg("show", ["days", "weeks"], weekly ? "weeks" : "days", (v) => setGrain(v === "weeks")));
+      actions.push(btn(weekly ? "« 4w" : "« 7d", T.dim, () => moveCol(weekly ? -4 : -7)));
+      actions.push(btn("◀", T.fg, () => moveCol(-1)));
+      actions.push(btn("▶", T.fg, () => moveCol(1)));
+      actions.push(btn(weekly ? "4w »" : "7d »", T.dim, () => moveCol(weekly ? 4 : 7)));
     } else if (view === "sessions") {
-      actions.push({ kind: "btn", label: "▶ resume", color: T.green, onPress: enter });
-      actions.push({ kind: "btn", label: typing ? "⌕ typing…" : "⌕ filter", color: T.yellow, onPress: () => setTyping(true) });
-      if (filtered) actions.push({ kind: "btn", label: "✕ clear filter", color: T.red, onPress: clearFilter });
-    } else {
-      actions.push({ kind: "btn", label: "≡ sessions", color: T.cyan, onPress: enter });
+      actions.push(btn(typing ? "⌕ typing…" : "⌕ filter", T.yellow, () => setTyping(true)));
+      if (filtered) actions.push(btn("✕ clear filter", T.red, clearFilter));
     }
-    if (selectedProject) actions.push({ kind: "btn", label: "↪ open folder", color: T.teal, onPress: () => cdProject(selectedProject) });
   }
   const trailing: BarItem[] = [
     { kind: "btn", label: scanState.kind === "scanning" ? `${spin} scanning` : "↻ rescan", color: T.cyan, onPress: rescan },
@@ -389,7 +380,7 @@ export function ClaudeUsage({ back, choose }: Props) {
     const g = projectGeometry(inner);
     columns = `  ${pad("project", g.nameW)}${"cost".padStart(10)}${"tokens".padStart(8)}${"sess".padStart(6)}${"days".padStart(6)}${"active".padStart(8)}  ${pad(`last ${Math.min(g.sparkW, days.length)}d`, g.sparkW + 1)}${pad("last", 13)}${pad("models", g.modelsW)}`;
     body = projects.slice(top, top + visRows).map((p, i) => (
-      <ProjectLine key={p.name} p={p} g={g} width={inner} selected={top + i === cur} onHover={() => select(top + i)} onPress={() => showSessions({ project: p.name })} />
+      <ProjectLine key={p.name} p={p} g={g} width={inner} selected={top + i === cur} onHover={() => select(top + i)} onPress={() => showSessions({ project: p.name })} onOpenFolder={() => cdProject(p.name)} />
     ));
     const p = projects[cur];
     if (p) {
@@ -420,6 +411,9 @@ export function ClaudeUsage({ back, choose }: Props) {
         selected={top + i === cur}
         onHover={() => select(top + i)}
         onPick={(col) => {
+          const b = cols[col];
+          // A second click on the cursor cell drills in, so the mouse never travels to a bar button.
+          if (top + i === cur && col === cursorCol && b) return showSessions({ project: p.name, from: b.days[0], to: b.days[b.days.length - 1] });
           select(top + i);
           setDayCursor(col);
         }}
@@ -595,64 +589,6 @@ function Tabs({
   );
 }
 
-// --- action bar ---------------------------------------------------------------
-
-type BarItem =
-  | { kind: "btn"; label: string; color: string; onPress: () => void }
-  | { kind: "seg"; label: string; options: { label: string; active: boolean; onPress: () => void }[] };
-
-const itemWidth = (it: BarItem): number =>
-  it.kind === "btn" ? it.label.length + 2 : it.label.length + 1 + it.options.reduce((n, o) => n + o.label.length + 2, 0);
-
-function BarButton({ it }: { it: BarItem }) {
-  if (it.kind === "btn")
-    return (
-      <box style={{ height: 1, width: it.label.length + 2, backgroundColor: T.surfaceAlt }} onMouseDown={it.onPress}>
-        <text fg={it.color}>{` ${it.label} `}</text>
-      </box>
-    );
-  return (
-    <box style={{ flexDirection: "row", height: 1, width: itemWidth(it) }}>
-      <text fg={T.dim}>{`${it.label} `}</text>
-      {it.options.map((o) => (
-        <box key={o.label} style={{ height: 1, width: o.label.length + 2, backgroundColor: o.active ? T.selectionBg : T.surfaceAlt }} onMouseDown={o.onPress}>
-          <text fg={o.active ? T.cyan : T.dim}>{` ${o.label} `}</text>
-        </box>
-      ))}
-    </box>
-  );
-}
-
-/** One row of buttons: the view's actions on the left, rescan/back flush right. */
-function ActionBar({ width, items, trailing }: { width: number; items: BarItem[]; trailing: BarItem[] }) {
-  const GAP = 2;
-  const rightW = trailing.reduce((n, it) => n + itemWidth(it) + 1, -1);
-  // Drop actions from the end rather than overflow on a narrow terminal.
-  const shown: BarItem[] = [];
-  let used = 0;
-  for (const it of items) {
-    const w = itemWidth(it) + (shown.length ? GAP : 0);
-    if (used + w > width - rightW - GAP) break;
-    shown.push(it);
-    used += w;
-  }
-  return (
-    <box style={{ flexDirection: "row", height: 1, width, backgroundColor: T.panel }}>
-      {shown.map((it, i) => (
-        <box key={`${it.label}${i}`} style={{ flexDirection: "row", height: 1, width: itemWidth(it) + (i ? GAP : 0), paddingLeft: i ? GAP : 0 }}>
-          <BarButton it={it} />
-        </box>
-      ))}
-      <box style={{ height: 1, width: Math.max(0, width - used - rightW) }} />
-      {trailing.map((it, i) => (
-        <box key={`t${it.label}`} style={{ flexDirection: "row", height: 1, width: itemWidth(it) + (i ? 1 : 0), paddingLeft: i ? 1 : 0 }}>
-          <BarButton it={it} />
-        </box>
-      ))}
-    </box>
-  );
-}
-
 function SummaryLine({ width, summary }: { width: number; summary: Summary | null }) {
   if (!summary) return <text fg={T.dim}>{pad("", width)}</text>;
   const t = summary.total;
@@ -678,13 +614,29 @@ interface ProjectGeo {
 
 function projectGeometry(inner: number): ProjectGeo {
   const sparkW = inner >= 160 ? 30 : inner >= 125 ? 21 : 14;
-  const fixed = 2 + 10 + 8 + 6 + 6 + 8 + 2 + sparkW + 1 + 13;
+  const fixed = 2 + 10 + 8 + 6 + 6 + 8 + 2 + sparkW + 1 + 13 + BTN_W;
   const rest = Math.max(20, inner - fixed);
   const nameW = Math.max(14, Math.min(28, Math.floor(rest * 0.45)));
   return { nameW, sparkW, modelsW: Math.max(0, rest - nameW) };
 }
 
-function ProjectLine({ p, g, width, selected, onHover, onPress }: { p: ProjectRow; g: ProjectGeo; width: number; selected: boolean; onHover: () => void; onPress: () => void }) {
+function ProjectLine({
+  p,
+  g,
+  width,
+  selected,
+  onHover,
+  onPress,
+  onOpenFolder,
+}: {
+  p: ProjectRow;
+  g: ProjectGeo;
+  width: number;
+  selected: boolean;
+  onHover: () => void;
+  onPress: () => void;
+  onOpenFolder: () => void;
+}) {
   return (
     <box style={{ flexDirection: "row", height: 1, width, backgroundColor: selected ? T.selectionBg : T.panel }} onMouseOver={onHover} onMouseDown={onPress}>
       <text>
@@ -700,6 +652,15 @@ function ProjectLine({ p, g, width, selected, onHover, onPress }: { p: ProjectRo
         <span fg={T.dim}>{pad(when(p.lastTs), 13)}</span>
         <span fg={T.dim}>{pad(p.models, g.modelsW)}</span>
       </text>
+      <box
+        style={{ width: BTN_W, height: 1, flexShrink: 0, backgroundColor: selected ? T.surfaceAlt : T.panel }}
+        onMouseDown={(e) => {
+          e.stopPropagation();
+          onOpenFolder();
+        }}
+      >
+        <text fg={T.teal}>{pad(" ↪", BTN_W)}</text>
+      </box>
     </box>
   );
 }

@@ -90,17 +90,20 @@ the provider.
 
 ## Screen
 
-Rows grouped by project (or provider, `g`), each: provider/project, id, fingerprint,
+Rows grouped by project (or provider — the `group` control), each: provider/project, id, fingerprint,
 source, file + var, a red `⚠ same key in N projects`, and row buttons `.env` / `↗` / `✕`.
-Keys: `n` new/mint, `a` add from clipboard, `w` write .env, `o` console, `x` revoke
-(two-press, panel border red, status line says local-only vs remote), `i` import, `p` add
-provider, `m` admin credential from clipboard. Forms replace the list (CommandEditor
-pattern), choice fields cycle with ←/→. `u` opens the Usage view, `R` the rotate screen.
+Action bar: `+ new key` (mint), `⧉ paste key` (add from clipboard), `$ usage`, `↻ rotate`,
+`⇣ import .env keys`, `group project | provider`, `+ provider`, `⚿ admin key` (admin credential
+from clipboard); `← back` flush right. Row `✕` revokes (two-press, panel border red, status
+line says local-only vs remote). Forms replace the list (CommandEditor pattern) and swap the
+bar for `✓ go` / `⧉ read clipboard` and `✕ cancel`; a click focuses a field, and a choice
+field steps with its `‹ ›` (or a click on the value). Letter keys (`n a w o x i p m g u R`)
+remain silent aliases.
 
 ## Usage (2026-10-04)
 
 "Which of my projects are spending right now." `keys usage [--project p] [--provider x]
-[--days n] [--refresh] [--json]` and the Usage view on the Keys screen (`u`). Nothing in the
+[--days n] [--refresh] [--json]` and the Usage view on the Keys screen (`$ usage`). Nothing in the
 morning brief or sal-agent (Sal's call).
 
 **Owners, not keys.** Providers report usage per provider-side key. Each key is matched to
@@ -124,7 +127,7 @@ today + the part of yesterday still inside the last 24 hours.
 
 **Cache.** `~/.destedtui/keys/usage.json` (plain JSON, `usage/cache.ts`, zod on read). No
 secrets: provider key ids and names, vault key ids, numbers. A read older than 15 minutes
-(or covering fewer days than asked) refetches; `--refresh` / `r` forces it; the screen also
+(or covering fewer days than asked) refetches; `--refresh` / `↻ refresh now` forces it; the screen also
 refetches every 15 minutes while open. All providers fetch in parallel; one failing becomes
 a status line, never a failed run.
 
@@ -175,13 +178,16 @@ timeout (fail, exit 2). Refuses to push on a stale cache when the portal is down
 
 ## Rotate (2026-10-04)
 
-`R` on the Keys screen, or `keys rotate` in a terminal (`src/screens/KeysRotate.tsx`,
+`↻ rotate` on the Keys screen, or `keys rotate` in a terminal (`src/screens/KeysRotate.tsx`,
 logic in `src/lib/keys/rotate.ts`). Replaces one shared key with one key per project, then
 revokes the shared one.
 
 **List** — every shared key (and any key a walk is still on): fingerprint, provider, N
 projects (`· M [dd]`), 7-day $ (from the usage cache; `—` = no provider-side key matched to
-this value), state. `enter` opens one; `d` is the dead-key batch.
+this value), state. A click (or enter) opens one; `☠ dead keys` is the dead-key batch. Every screen here
+has an action bar whose buttons send the keyboard handler the key they stand for, so a button
+and its key share one code path, two-press arming included (the armed button reads
+`⚠ confirm: …` and back becomes `✕ cancel`). A click on an overview row flips new key / cut off.
 
 **Overview** — one row per project holding the value, plus folders whose deployed app holds it
 even though their `.env` doesn't. Columns: last activity (newest of the last prompt in
@@ -214,7 +220,7 @@ A failed step records the error on that project and stays the next step. Progres
 
 **Finish** — only when every "new key" project has all steps done and verify OK. `enter`
 re-reads Drydock (no stale cache), refuses while any app still holds the old fingerprint or
-an unmapped app does, and wants `O` (override) for apps whose value is unknown. Then `enter`
+an unmapped app does, and wants `override on` for apps whose value is unknown. Then `enter`
 twice: revoke at the provider through the adapter (remote id, or `locate` by value); without
 one, the console opens and the status line names the key (minted ones by their
 `keys-<project>` name, others by their last 4 characters), and the next `enter` confirms it's
@@ -222,10 +228,10 @@ gone. Every remaining record of the value is marked revoked and its line removed
 `.env` files of the cut-off projects (only where the line still holds that value).
 
 **Dead keys** (`d`, or `keys rotate --dead`) — shared keys with no project active in 30
-days and no Drydock app holding the value. `space` picks, `a` picks every clear one, `enter`
-twice revokes them one after another with the same adapter / console fallback. A key that a
-deployed app *might* hold (value unknown) is shown `[⛔]` and can't be picked until `o`
-overrides it. A deployed project whose app demonstrably runs a different value doesn't keep a
+days and no Drydock app holding the value. A row click picks, `✓ pick all clear` picks every clear one,
+`✕ revoke picked` twice revokes them one after another with the same adapter / console fallback. A key that a
+deployed app *might* hold (value unknown) is shown `[⛔]` and can't be picked until its row's `⛔ override`
+lifts it. A deployed project whose app demonstrably runs a different value doesn't keep a
 key alive.
 
 **Dry runs.** Every step function takes `dryRun`. `keys rotate --fingerprint <fp> [--new

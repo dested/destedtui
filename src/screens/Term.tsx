@@ -252,8 +252,18 @@ export function Term({ cwd, back }: Props) {
           editingId={editField === "name" ? editingId : null}
           draft={draft}
           onRename={startRename}
+          onBack={back}
         />
-        <Pane active={active} mode={mode} noteEditing={noteEditing} noteDraft={draft.current} />
+        <Pane
+          active={active}
+          mode={mode}
+          cwd={cwd}
+          noteEditing={noteEditing}
+          noteDraft={draft.current}
+          onNote={() => {
+            if (active) startNote(active.id);
+          }}
+        />
       </box>
       <Footer hints={hints(editingId !== null ? editField : null, mode, sessions.length)} />
     </box>
@@ -272,20 +282,15 @@ function hints(editing: "name" | "note" | null, mode: string, count: number): Hi
   if (mode === "input") {
     return [
       ["type", "→ terminal"],
-      ["ctrl+b", "leader"],
-      ["ctrl+b d", "nav"],
-      ["ctrl+b n/c", "new"],
-      ["ctrl+b r/t", "name/note"],
+      ["click", "the rail / buttons"],
+      ["ctrl+b d", "stop typing"],
     ];
   }
   return [
+    ["click", "anything"],
     ["↑↓", "switch"],
-    ["enter", "focus"],
-    ["n/c", "new"],
-    ["r", "rename"],
-    ["t", "note"],
-    ["x", count ? "close" : "—"],
-    ["q", "back"],
+    ["enter", count ? "type into it" : "—"],
+    ["esc", "back"],
   ];
 }
 
@@ -296,6 +301,7 @@ function Rail({
   editingId,
   draft,
   onRename,
+  onBack,
 }: {
   sessions: TermSession[];
   activeId: string | null;
@@ -303,6 +309,7 @@ function Rail({
   editingId: string | null;
   draft: { current: string };
   onRename: (id: string) => void;
+  onBack: () => void;
 }) {
   return (
     <box
@@ -342,11 +349,10 @@ function Rail({
           <Button label="+ shell" color={T.green} onPress={() => term.create("shell", cwd)} />
           <Button label="✦ claude" color={T.purple} onPress={() => term.create("claude", cwd)} />
         </box>
-        {sessions.length > 0 ? (
-          <box style={{ flexDirection: "row", height: 1 }}>
-            <Button label="✕ close all" color={T.red} onPress={() => term.closeAll()} />
-          </box>
-        ) : null}
+        <box style={{ flexDirection: "row", gap: 1, height: 1 }}>
+          {sessions.length > 0 ? <Button label="✕ close all" color={T.red} onPress={() => term.closeAll()} /> : null}
+          <Button label="← back" color={T.dim} onPress={onBack} />
+        </box>
       </box>
     </box>
   );
@@ -423,10 +429,17 @@ function TermCard({
   );
 }
 
-/** Always-visible one-line scratchpad above the terminal; `t` edits it inline. */
-function NoteStrip({ session, editing, draft }: { session: TermSession; editing: boolean; draft: string }) {
+/** Always-visible one-line scratchpad above the terminal; a click (or `t`) edits it inline. */
+function NoteStrip({ session, editing, draft, onEdit }: { session: TermSession; editing: boolean; draft: string; onEdit: () => void }) {
   return (
-    <box style={{ flexDirection: "row", paddingLeft: 1, paddingRight: 1, height: 1 }}>
+    <box
+      style={{ flexDirection: "row", paddingLeft: 1, paddingRight: 1, height: 1 }}
+      onMouseDown={(e) => {
+        // Editing the note shouldn't also hand the keyboard to the terminal (the pane's own click).
+        e.stopPropagation();
+        if (!editing) onEdit();
+      }}
+    >
       {editing ? (
         <text>
           <span fg={T.yellow}>{"✎ "}</span>
@@ -440,7 +453,7 @@ function NoteStrip({ session, editing, draft }: { session: TermSession; editing:
           <span fg={T.fg}>{session.note}</span>
         </text>
       ) : (
-        <text fg={T.dim}>{"✎ press t for a note"}</text>
+        <text fg={T.dim}>{"✎ click to add a note"}</text>
       )}
     </box>
   );
@@ -449,13 +462,17 @@ function NoteStrip({ session, editing, draft }: { session: TermSession; editing:
 function Pane({
   active,
   mode,
+  cwd,
   noteEditing,
   noteDraft,
+  onNote,
 }: {
   active: TermSession | null;
   mode: string;
+  cwd: string;
   noteEditing: boolean;
   noteDraft: string;
+  onNote: () => void;
 }) {
   const focused = mode === "input" && active !== null;
   const statusColor = !active ? T.dim : active.status === "running" ? (focused ? T.teal : T.dim) : T.red;
@@ -488,7 +505,7 @@ function Pane({
         <text fg={T.dim}>{active ? `${active.kind} · ${active.cwd}` : ""}</text>
         <text fg={statusColor}>{status}</text>
       </box>
-      {active ? <NoteStrip session={active} editing={noteEditing} draft={noteDraft} /> : null}
+      {active ? <NoteStrip session={active} editing={noteEditing} draft={noteDraft} onEdit={onNote} /> : null}
       {active ? (
         <box style={{ flexGrow: 1, paddingLeft: 1, paddingRight: 1, paddingBottom: 1 }}>
           <TerminalView key={active.id} session={active} />
@@ -497,17 +514,9 @@ function Pane({
         <box style={{ flexGrow: 1, flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 1 }}>
           <text fg={T.teal}>▓ terminals</text>
           <text fg={T.dim}>your pwsh, or a claude session — as many as you like</text>
-          <box style={{ flexDirection: "row", gap: 2, marginTop: 1 }}>
-            <text>
-              <span fg={T.green}>n</span>
-              <span fg={T.dim}>{" or "}</span>
-              <span fg={T.green}>+ shell</span>
-            </text>
-            <text>
-              <span fg={T.purple}>c</span>
-              <span fg={T.dim}>{" or "}</span>
-              <span fg={T.purple}>✦ claude</span>
-            </text>
+          <box style={{ flexDirection: "row", gap: 2, marginTop: 1, height: 1 }}>
+            <Button label="+ shell" color={T.green} onPress={() => term.create("shell", cwd)} />
+            <Button label="✦ claude" color={T.purple} onPress={() => term.create("claude", cwd)} />
           </box>
         </box>
       )}
