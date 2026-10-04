@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-04 — Claude usage: weeks on the timeline, every toggle a button
+Asked: a weekly toggle, then "buttons for things, not letter toggles". Done: timeline `show days | weeks` (Monday-start weeks, sessions drill-down scoped to the week); an action bar per view (sort segmented control, ◀ ▶ « », sessions, resume, filter, clear filter, open folder, rescan, back), keys kept as silent aliases, footer cut to click/↑↓/enter/esc. snap-claude gained `click:<label>`. tsc green; clicks verified headless at 120×34 and 100×30.
+Touched: src/screens/ClaudeUsage.tsx, scripts/snap-claude.tsx, features/claude-usage.md, ui.md, verify.md
+
 ## 2026-10-04 — Claude usage: cost, tokens, sessions and a timeline per project
 Asked: per-project Claude Code cost (like ccusage) plus a timeline of which project when, tokens, sessions. Done: native transcript scanner with an incremental cache (byte offsets, in-file + cross-file dedupe, cold ~55s in a Worker, warm ~1s), API-equivalent pricing per model incl. 1h/5m cache writes and fast mode (matches Claude Code's own cost-state to the cent on single-model sessions), cwd → g:\code project roll-up incl. scratchpad slugs; Claude Usage screen with projects / timeline heatmap / sessions (▶ resume) / days and today–all-time ranges; `destedtui --usage [--json]`. tsc green; headless frames at 180×46, 120×30, 100×30.
 Touched: src/lib/claude/**, src/screens/ClaudeUsage.tsx, src/index.tsx, src/App.tsx, src/routes.ts, src/screens/MainMenu.tsx, src/screens/Projects.tsx, scripts/snap-claude.tsx, features/claude-usage.md, cliffnotes.md, ui.md, decisions.md, verify.md

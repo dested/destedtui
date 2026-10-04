@@ -48,7 +48,32 @@ type ScanState = { kind: "idle"; read: number } | { kind: "scanning"; p: ScanPro
 
 interface SessionFilter {
   project?: string;
-  day?: string;
+  /** Inclusive local-day range — one day from the day log, a week from the weekly timeline. */
+  from?: string;
+  to?: string;
+}
+
+/** A timeline column: one day, or a Monday-start week (clipped to the range). */
+interface Bucket {
+  days: string[];
+  label: string;
+}
+
+function buckets(days: string[], weekly: boolean): Bucket[] {
+  if (!weekly) return days.map((d) => ({ days: [d], label: d.slice(5) }));
+  const out: Bucket[] = [];
+  for (const d of days) {
+    const last = out[out.length - 1];
+    if (last && new Date(`${d}T12:00:00`).getDay() !== 1) last.days.push(d);
+    else out.push({ days: [d], label: d.slice(5) });
+  }
+  return out;
+}
+
+function spanLabel(from: string, to: string): string {
+  if (from === to) return weekdayDate(from);
+  const short = (d: string) => new Date(`${d}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  return `${short(from)} – ${short(to)}`;
 }
 
 /** Keep `sel` inside a window of `vis` rows that moves only when it has to. */
@@ -64,9 +89,9 @@ function weekdayDate(day: string): string {
   return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 }
 
-/** Sessions with any activity on `day` — approximated by their first..last message span. */
-function sessionTouches(s: SessionRow, day: string): boolean {
-  return dayKey(s.start) <= day && day <= dayKey(s.end);
+/** Sessions with any activity in [from, to] — approximated by their first..last message span. */
+function sessionTouches(s: SessionRow, from: string, to: string): boolean {
+  return dayKey(s.start) <= to && from <= dayKey(s.end);
 }
 
 /**
@@ -83,6 +108,7 @@ export function ClaudeUsage({ back, choose }: Props) {
   const [sort, setSort] = useState<Sort>("cost");
   const [sel, setSel] = useState<Record<View, number>>({ projects: 0, timeline: 0, sessions: 0, days: 0 });
   const [dayCursor, setDayCursor] = useState<number | null>(null);
+  const [weekly, setWeekly] = useState(false);
   const [filter, setFilter] = useState<SessionFilter>({});
   const [text, setText] = useState("");
   const [typing, setTyping] = useState(false);
@@ -164,7 +190,7 @@ export function ClaudeUsage({ back, choose }: Props) {
     return (summary?.sessions ?? []).filter(
       (s) =>
         (!filter.project || s.project === filter.project) &&
-        (!filter.day || sessionTouches(s, filter.day)) &&
+        (!filter.from || !filter.to || sessionTouches(s, filter.from, filter.to)) &&
         (!q || s.title.toLowerCase().includes(q) || s.project.toLowerCase().includes(q) || s.id.startsWith(q)),
     );
   }, [summary, filter, text]);
@@ -172,17 +198,36 @@ export function ClaudeUsage({ back, choose }: Props) {
   const heatRows = summary?.projects ?? [];
   const dayRows = summary?.dayRows ?? [];
   const days = summary?.days ?? [];
+  const cols = useMemo(() => buckets(summary?.days ?? [], weekly), [summary, weekly]);
 
   // --- geometry ---------------------------------------------------------------
   const inner = Math.max(70, width - 6);
-  // header 3 + border 2 + tabs + summary + column header + detail + status + footer/margins 2
-  const visRows = Math.max(3, height - 11 - DETAIL_ROWS);
+  // header 3 + border 2 + tabs + summary + column header + detail + action bar + status + footer/margins 2
+  const visRows = Math.max(3, height - 12 - DETAIL_ROWS);
   const counts: Record<View, number> = { projects: projects.length, timeline: heatRows.length, sessions: sessions.length, days: dayRows.length };
   const count = counts[view];
   const cur = Math.min(sel[view], Math.max(0, count - 1));
   const top = windowTop(tops.current[view], cur, count, visRows);
   tops.current[view] = top;
-  const cursorDay = Math.min(dayCursor ?? days.length - 1, days.length - 1);
+  const cursorCol = Math.min(dayCursor ?? cols.length - 1, cols.length - 1);
+  const filtered = Boolean(filter.project || filter.from || text);
+
+  const changeRange = (r: RangeDays) => {
+    setDayCursor(null);
+    dayStart.current = null;
+    setRange(r);
+  };
+  const setGrain = (w: boolean) => {
+    setDayCursor(null);
+    dayStart.current = null;
+    setWeekly(w);
+  };
+  const moveCol = (by: number) => setDayCursor(Math.max(0, Math.min(cols.length - 1, cursorCol + by)));
+  const clearFilter = () => {
+    setFilter({});
+    setText("");
+    setTyping(false);
+  };
 
   const select = (i: number) => setSel((s) => ({ ...s, [view]: Math.max(0, Math.min(count - 1, i)) }));
   const switchView = (v: View) => {
@@ -219,11 +264,11 @@ export function ClaudeUsage({ back, choose }: Props) {
       if (p) showSessions({ project: p.name });
     } else if (view === "timeline") {
       const p = heatRows[cur];
-      const day = days[cursorDay];
-      if (p && day) showSessions({ project: p.name, day });
+      const col = cols[cursorCol];
+      if (p && col) showSessions({ project: p.name, from: col.days[0], to: col.days[col.days.length - 1] });
     } else if (view === "days") {
       const d = dayRows[cur];
-      if (d) showSessions({ day: d.day });
+      if (d) showSessions({ from: d.day, to: d.day });
     } else resume(sessions[cur]);
   };
 
@@ -244,11 +289,7 @@ export function ClaudeUsage({ back, choose }: Props) {
       return;
     }
     if (key.name === "escape" || key.sequence === "q") {
-      if (view === "sessions" && (filter.project || filter.day || text)) {
-        setFilter({});
-        setText("");
-        return;
-      }
+      if (view === "sessions" && filtered) return clearFilter();
       return back();
     }
     if (key.name === "tab") {
@@ -263,8 +304,8 @@ export function ClaudeUsage({ back, choose }: Props) {
     if (key.name === "end") return select(count - 1);
     if (key.name === "return") return enter();
     if (view === "timeline" && (key.name === "left" || key.name === "right")) {
-      const step = key.shift ? 7 : 1;
-      return setDayCursor(Math.max(0, Math.min(days.length - 1, cursorDay + (key.name === "left" ? -step : step))));
+      const step = key.shift ? (weekly ? 4 : 7) : 1;
+      return moveCol(key.name === "left" ? -step : step);
     }
     switch (key.sequence) {
       case "1":
@@ -273,13 +314,12 @@ export function ClaudeUsage({ back, choose }: Props) {
       case "4":
         return switchView(VIEWS[Number(key.sequence) - 1] ?? "projects");
       case "d":
-        setDayCursor(null);
-        dayStart.current = null;
-        return setRange((r) => RANGES[(RANGES.indexOf(r) + 1) % RANGES.length] ?? 30);
+        return changeRange(RANGES[(RANGES.indexOf(range) + 1) % RANGES.length] ?? 30);
       case "D":
-        setDayCursor(null);
-        dayStart.current = null;
-        return setRange((r) => RANGES[(RANGES.indexOf(r) + RANGES.length - 1) % RANGES.length] ?? 30);
+        return changeRange(RANGES[(RANGES.indexOf(range) + RANGES.length - 1) % RANGES.length] ?? 30);
+      case "w":
+        if (view === "timeline") setGrain(!weekly);
+        return;
       case "s":
         if (view === "projects") setSort((s) => SORTS[(SORTS.indexOf(s) + 1) % SORTS.length] ?? "cost");
         return;
@@ -297,17 +337,43 @@ export function ClaudeUsage({ back, choose }: Props) {
   });
 
   const spin = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "·";
-  const wide = width >= 150;
   const hints: Hint[] = [
-    ["1-4", "view"],
-    ["d", rangeLabel(range)],
-    ...(view === "projects" ? ([["enter", "sessions"], ["s", `sort ${sort}`]] satisfies Hint[]) : []),
-    ...(view === "timeline" ? ([["←→", wide ? "day (shift = week)" : "day"], ["enter", "sessions"]] satisfies Hint[]) : []),
-    ...(view === "sessions" ? ([["enter/▶", "resume"], ["/", "filter"]] satisfies Hint[]) : []),
-    ...(view === "days" ? ([["enter", "sessions"]] satisfies Hint[]) : []),
-    ...(wide && view !== "days" ? ([["g", "cd there"]] satisfies Hint[]) : []),
-    ...(wide ? ([["r", "rescan"]] satisfies Hint[]) : []),
-    ["esc", view === "sessions" && (filter.project || filter.day || text) ? "clear filter" : "back"],
+    ["click", "anything"],
+    ["↑↓", "select"],
+    ...(view === "timeline" ? ([["←→", weekly ? "week" : "day"]] satisfies Hint[]) : []),
+    ["enter", view === "sessions" ? "resume" : "sessions"],
+    ["esc", view === "sessions" && filtered ? "clear filter" : "back"],
+  ];
+
+  // The action bar: every toggle and action as a button — keys are only silent aliases.
+  const selectedProject = view === "projects" ? projects[cur]?.name : view === "timeline" ? heatRows[cur]?.name : view === "sessions" ? sessions[cur]?.project : undefined;
+  const actions: BarItem[] = [];
+  if (summary) {
+    if (view === "projects") {
+      actions.push({ kind: "seg", label: "sort", options: SORTS.map((o) => ({ label: o, active: o === sort, onPress: () => setSort(o) })) });
+      actions.push({ kind: "btn", label: "≡ sessions", color: T.cyan, onPress: enter });
+    } else if (view === "timeline") {
+      actions.push({ kind: "seg", label: "show", options: [
+        { label: "days", active: !weekly, onPress: () => setGrain(false) },
+        { label: "weeks", active: weekly, onPress: () => setGrain(true) },
+      ] });
+      actions.push({ kind: "btn", label: weekly ? "« 4w" : "« 7d", color: T.dim, onPress: () => moveCol(weekly ? -4 : -7) });
+      actions.push({ kind: "btn", label: "◀", color: T.fg, onPress: () => moveCol(-1) });
+      actions.push({ kind: "btn", label: "▶", color: T.fg, onPress: () => moveCol(1) });
+      actions.push({ kind: "btn", label: weekly ? "4w »" : "7d »", color: T.dim, onPress: () => moveCol(weekly ? 4 : 7) });
+      actions.push({ kind: "btn", label: "≡ sessions", color: T.cyan, onPress: enter });
+    } else if (view === "sessions") {
+      actions.push({ kind: "btn", label: "▶ resume", color: T.green, onPress: enter });
+      actions.push({ kind: "btn", label: typing ? "⌕ typing…" : "⌕ filter", color: T.yellow, onPress: () => setTyping(true) });
+      if (filtered) actions.push({ kind: "btn", label: "✕ clear filter", color: T.red, onPress: clearFilter });
+    } else {
+      actions.push({ kind: "btn", label: "≡ sessions", color: T.cyan, onPress: enter });
+    }
+    if (selectedProject) actions.push({ kind: "btn", label: "↪ open folder", color: T.teal, onPress: () => cdProject(selectedProject) });
+  }
+  const trailing: BarItem[] = [
+    { kind: "btn", label: scanState.kind === "scanning" ? `${spin} scanning` : "↻ rescan", color: T.cyan, onPress: rescan },
+    { kind: "btn", label: "← back", color: T.dim, onPress: back },
   ];
 
   let body: ReactNode;
@@ -336,20 +402,20 @@ export function ClaudeUsage({ back, choose }: Props) {
       ];
     }
   } else if (view === "timeline") {
-    const g = timelineGeometry(inner, days.length, cursorDay, dayStart.current ?? Math.max(0, days.length - 1));
+    const g = timelineGeometry(inner, cols.length, cursorCol, dayStart.current ?? Math.max(0, cols.length - 1), weekly);
     dayStart.current = g.start;
-    columns = timelineHeader(days, g, inner);
+    columns = timelineHeader(cols, g, inner, weekly);
     let max = 0;
-    for (const p of heatRows) for (const d of days.slice(g.start, g.start + g.cols)) max = Math.max(max, summary.heat.get(p.name)?.get(d)?.cost ?? 0);
+    for (const p of heatRows) for (const b of cols.slice(g.start, g.start + g.cols)) max = Math.max(max, bucketCell(summary, p.name, b).cost);
     body = heatRows.slice(top, top + visRows).map((p, i) => (
       <HeatLine
         key={p.name}
         p={p}
         summary={summary}
-        days={days}
+        cols={cols}
         g={g}
         max={max}
-        cursor={cursorDay}
+        cursor={cursorCol}
         width={inner}
         selected={top + i === cur}
         onHover={() => select(top + i)}
@@ -360,15 +426,27 @@ export function ClaudeUsage({ back, choose }: Props) {
       />
     ));
     const p = heatRows[cur];
-    const day = days[cursorDay];
-    if (p && day) {
-      const cell = summary.heat.get(p.name)?.get(day);
-      const titles = summary.sessions.filter((s) => s.project === p.name && sessionTouches(s, day)).map((s) => s.title || s.id.slice(0, 8));
-      const dayTotal = dayRows.find((d) => d.day === day);
+    const col = cols[cursorCol];
+    const from = col?.days[0];
+    const to = col?.days[col.days.length - 1];
+    if (p && col && from && to) {
+      const cell = bucketCell(summary, p.name, col);
+      const touched = summary.sessions.filter((s) => s.project === p.name && sessionTouches(s, from, to));
+      const titles = touched.map((s) => s.title || s.id.slice(0, 8));
+      const inCol = dayRows.filter((d) => d.day >= from && d.day <= to);
+      const colCost = inCol.reduce((n, d) => n + d.cost, 0);
+      const colActive = inCol.reduce((n, d) => n + d.activeMin, 0);
+      const colProjects = new Set(inCol.flatMap((d) => d.projects.map((x) => x.name))).size;
       detail = [
-        { text: `${p.name} · ${weekdayDate(day)} · ${cell ? `${usd(cell.cost)} · ${hm(cell.activeMin)} active · ${cell.sessions} session${cell.sessions === 1 ? "" : "s"}` : "nothing"}`, color: cell ? T.fg : T.dim },
+        {
+          text: `${p.name} · ${spanLabel(from, to)} · ${cell.cost > 0 ? `${usd(cell.cost)} · ${hm(cell.activeMin)} active · ${touched.length} session${touched.length === 1 ? "" : "s"}` : "nothing"}`,
+          color: cell.cost > 0 ? T.fg : T.dim,
+        },
         { text: titles.length ? titles.join(" · ") : "", color: T.dim },
-        { text: dayTotal ? `whole day: ${usd(dayTotal.cost)} · ${hm(dayTotal.activeMin)} active across ${dayTotal.projects.length} project${dayTotal.projects.length === 1 ? "" : "s"}` : "", color: T.dim },
+        {
+          text: inCol.length ? `whole ${weekly ? "week" : "day"}: ${usd(colCost)} · ${hm(colActive)} active across ${colProjects} project${colProjects === 1 ? "" : "s"}` : "",
+          color: T.dim,
+        },
       ];
     }
   } else if (view === "sessions") {
@@ -395,7 +473,7 @@ export function ClaudeUsage({ back, choose }: Props) {
     const g = dayGeometry(inner);
     columns = `  ${pad("day", 12)}${"cost".padStart(10)}${"active".padStart(8)}${"sess".padStart(6)}${"tokens".padStart(8)}  ${pad("projects", g.projW)}`;
     body = dayRows.slice(top, top + visRows).map((d, i) => (
-      <DayLine key={d.day} d={d} g={g} width={inner} selected={top + i === cur} onHover={() => select(top + i)} onPress={() => showSessions({ day: d.day })} />
+      <DayLine key={d.day} d={d} g={g} width={inner} selected={top + i === cur} onHover={() => select(top + i)} onPress={() => showSessions({ from: d.day, to: d.day })} />
     ));
     const d = dayRows[cur];
     if (d) {
@@ -425,7 +503,7 @@ export function ClaudeUsage({ back, choose }: Props) {
             color: ds && ds.unpriced.length ? T.yellow : T.dim,
           });
 
-  const scope = [filter.project, filter.day ? weekdayDate(filter.day) : ""].filter(Boolean).join(" · ");
+  const scope = [filter.project, filter.from && filter.to ? spanLabel(filter.from, filter.to) : ""].filter(Boolean).join(" · ");
   const filterText =
     view !== "sessions" ? "" : typing ? `  /${text}▏` : scope || text ? `  ▸ ${[scope, text ? `"${text}"` : ""].filter(Boolean).join(" · ")}` : "";
 
@@ -448,7 +526,7 @@ export function ClaudeUsage({ back, choose }: Props) {
           backgroundColor: T.panel,
         }}
       >
-        <Tabs width={inner} view={view} range={range} filterText={filterText} typing={typing} onView={switchView} onRange={setRange} />
+        <Tabs width={inner} view={view} range={range} filterText={filterText} typing={typing} onView={switchView} onRange={changeRange} />
         <SummaryLine width={inner} summary={summary} />
         <text fg={T.dim}>{pad(columns, inner)}</text>
         <box
@@ -466,6 +544,7 @@ export function ClaudeUsage({ back, choose }: Props) {
             </text>
           ))}
         </box>
+        <ActionBar width={inner} items={actions} trailing={trailing} />
         <text fg={status.color}>{pad(status.text, inner)}</text>
       </box>
       <Footer hints={hints} />
@@ -510,6 +589,64 @@ function Tabs({
       {ranges.map((r) => (
         <box key={r.r} style={{ height: 1, width: r.label.length, backgroundColor: r.r === range ? T.surfaceAlt : T.panel }} onMouseDown={() => onRange(r.r)}>
           <text fg={r.r === range ? T.cyan : T.dim}>{r.label}</text>
+        </box>
+      ))}
+    </box>
+  );
+}
+
+// --- action bar ---------------------------------------------------------------
+
+type BarItem =
+  | { kind: "btn"; label: string; color: string; onPress: () => void }
+  | { kind: "seg"; label: string; options: { label: string; active: boolean; onPress: () => void }[] };
+
+const itemWidth = (it: BarItem): number =>
+  it.kind === "btn" ? it.label.length + 2 : it.label.length + 1 + it.options.reduce((n, o) => n + o.label.length + 2, 0);
+
+function BarButton({ it }: { it: BarItem }) {
+  if (it.kind === "btn")
+    return (
+      <box style={{ height: 1, width: it.label.length + 2, backgroundColor: T.surfaceAlt }} onMouseDown={it.onPress}>
+        <text fg={it.color}>{` ${it.label} `}</text>
+      </box>
+    );
+  return (
+    <box style={{ flexDirection: "row", height: 1, width: itemWidth(it) }}>
+      <text fg={T.dim}>{`${it.label} `}</text>
+      {it.options.map((o) => (
+        <box key={o.label} style={{ height: 1, width: o.label.length + 2, backgroundColor: o.active ? T.selectionBg : T.surfaceAlt }} onMouseDown={o.onPress}>
+          <text fg={o.active ? T.cyan : T.dim}>{` ${o.label} `}</text>
+        </box>
+      ))}
+    </box>
+  );
+}
+
+/** One row of buttons: the view's actions on the left, rescan/back flush right. */
+function ActionBar({ width, items, trailing }: { width: number; items: BarItem[]; trailing: BarItem[] }) {
+  const GAP = 2;
+  const rightW = trailing.reduce((n, it) => n + itemWidth(it) + 1, -1);
+  // Drop actions from the end rather than overflow on a narrow terminal.
+  const shown: BarItem[] = [];
+  let used = 0;
+  for (const it of items) {
+    const w = itemWidth(it) + (shown.length ? GAP : 0);
+    if (used + w > width - rightW - GAP) break;
+    shown.push(it);
+    used += w;
+  }
+  return (
+    <box style={{ flexDirection: "row", height: 1, width, backgroundColor: T.panel }}>
+      {shown.map((it, i) => (
+        <box key={`${it.label}${i}`} style={{ flexDirection: "row", height: 1, width: itemWidth(it) + (i ? GAP : 0), paddingLeft: i ? GAP : 0 }}>
+          <BarButton it={it} />
+        </box>
+      ))}
+      <box style={{ height: 1, width: Math.max(0, width - used - rightW) }} />
+      {trailing.map((it, i) => (
+        <box key={`t${it.label}`} style={{ flexDirection: "row", height: 1, width: itemWidth(it) + (i ? 1 : 0), paddingLeft: i ? 1 : 0 }}>
+          <BarButton it={it} />
         </box>
       ))}
     </box>
@@ -575,29 +712,43 @@ const TOTAL_W = 10;
 interface TimelineGeo {
   cellW: number;
   cols: number;
-  /** First visible day index — the grid scrolls to keep the cursor in view. */
+  /** First visible column index — the grid scrolls to keep the cursor in view. */
   start: number;
 }
 
-function timelineGeometry(inner: number, dayCount: number, cursor: number, prevStart: number): TimelineGeo {
+function timelineGeometry(inner: number, colCount: number, cursor: number, prevStart: number, weekly: boolean): TimelineGeo {
   const avail = Math.max(10, inner - 2 - LABEL_W - TOTAL_W);
-  // As wide as the range allows (up to 4 cells a day), so 7d and 30d fill the panel instead of huddling left.
-  const cellW = Math.max(1, Math.min(4, Math.floor(avail / Math.max(1, dayCount))));
-  const cols = Math.min(dayCount, Math.floor(avail / cellW));
-  return { cellW, cols, start: windowTop(prevStart, cursor, dayCount, cols) };
+  // As wide as the range allows, so short ranges fill the panel instead of huddling left.
+  const cellW = Math.max(1, Math.min(weekly ? 12 : 4, Math.floor(avail / Math.max(1, colCount))));
+  const cols = Math.min(colCount, Math.floor(avail / cellW));
+  return { cellW, cols, start: windowTop(prevStart, cursor, colCount, cols) };
 }
 
-/** Column header: an MM-DD label on each Monday (and the first column), where it fits. */
-function timelineHeader(days: string[], g: TimelineGeo, inner: number): string {
+/** A project's cost and active time summed over a bucket's days. */
+function bucketCell(summary: Summary, project: string, b: Bucket): { cost: number; activeMin: number } {
+  const row = summary.heat.get(project);
+  let cost = 0;
+  let activeMin = 0;
+  for (const d of b.days) {
+    const cell = row?.get(d);
+    cost += cell?.cost ?? 0;
+    activeMin += cell?.activeMin ?? 0;
+  }
+  return { cost, activeMin };
+}
+
+/** Column header: an MM-DD label on each Monday (every week when weekly) and the first column, where it fits. */
+function timelineHeader(cols: Bucket[], g: TimelineGeo, inner: number, weekly: boolean): string {
   const chars = Array.from({ length: g.cols * g.cellW }, () => " ");
   let freeFrom = 0;
   for (let c = 0; c < g.cols; c++) {
-    const day = days[g.start + c];
-    if (!day) break;
+    const b = cols[g.start + c];
+    const day = b?.days[0];
+    if (!b || !day) break;
     const monday = new Date(`${day}T12:00:00`).getDay() === 1;
     const x = c * g.cellW;
-    if ((c === 0 || monday) && x >= freeFrom) {
-      const label = day.slice(5);
+    if ((c === 0 || weekly || monday) && x >= freeFrom) {
+      const label = b.label;
       for (let k = 0; k < label.length && x + k < chars.length; k++) chars[x + k] = label[k] ?? " ";
       freeFrom = x + label.length + 1;
     }
@@ -609,7 +760,7 @@ function timelineHeader(days: string[], g: TimelineGeo, inner: number): string {
 function HeatLine({
   p,
   summary,
-  days,
+  cols,
   g,
   max,
   cursor,
@@ -620,7 +771,7 @@ function HeatLine({
 }: {
   p: ProjectRow;
   summary: Summary;
-  days: string[];
+  cols: Bucket[];
   g: TimelineGeo;
   max: number;
   cursor: number;
@@ -629,11 +780,11 @@ function HeatLine({
   onHover: () => void;
   onPick: (col: number) => void;
 }) {
-  const row = summary.heat.get(p.name);
   const cells = [];
   for (let c = 0; c < g.cols; c++) {
     const i = g.start + c;
-    const cost = row?.get(days[i] ?? "")?.cost ?? 0;
+    const b = cols[i];
+    const cost = b ? bucketCell(summary, p.name, b).cost : 0;
     // sqrt so a $5 day is still visible next to a $1,500 one
     const level = cost <= 0 || max <= 0 ? -1 : Math.min(HEAT.length - 1, Math.floor(Math.sqrt(cost / max) * HEAT.length));
     const glyph = level < 0 ? "·" : (HEAT[level] ?? "█");

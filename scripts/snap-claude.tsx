@@ -1,5 +1,6 @@
 // Headless frames of the Claude usage screen: bun scripts/snap-claude.tsx [--size 170x44]
 // [--keys "2 snap right right snap d snap …"]. Each `snap` prints the frame; `waitN` waits N ms;
+// `click:<label>` clicks the first on-screen occurrence of <label> (`_` stands for a space);
 // the other words are key names (enter, escape, tab, up, down, left, right, or a single character).
 // Read-only — it reads ~/.claude/projects and the usage cache, never writes a transcript.
 // Use this, not tmux, to judge alignment: psmux drops cursor-skipped spaces in diffed rows.
@@ -34,6 +35,15 @@ for (const step of steps) {
   if (step === "snap") {
     console.log(`\n=================== frame ${++n} ===================`);
     console.log(setup.captureCharFrame());
+    continue;
+  }
+  if (step.startsWith("click:")) {
+    const label = step.slice(6).replaceAll("_", " ");
+    const lines = setup.captureCharFrame().split(String.fromCharCode(10));
+    const y = lines.findIndex((l) => l.includes(label));
+    if (y < 0) console.log(`click: "${label}" not on screen`);
+    else await setup.mockMouse.click((lines[y] ?? "").indexOf(label) + 1, y);
+    await settle();
     continue;
   }
   if (step.startsWith("wait")) {

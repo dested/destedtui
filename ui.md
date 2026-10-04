@@ -55,7 +55,9 @@ Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue�
 
 **Tabbed views** (claude usage): one row of ` 1 projects ` tabs on the left (active tab accent-on-`selectionBg`) and range chips on the right (active chip cyan on `surfaceAlt`), both clickable; a live filter sits between them in teal (`▸ drydock`) or yellow while typing (`/text▏`). Below: a summary line, the column header, the rows, a fixed 3-row detail strip for the selected row, and a status line.
 
-**Heatmap** (claude usage timeline): project label column, then one 1–4-cell column per day (sized to fill the panel), then a right-aligned total. Empty day `·` in `T.border`; activity `░▒` in `T.blue`, `▓█` in `T.cyan`, on a sqrt scale so small days still show. The cursor day is a `T.surface` column (`T.border` on the selected row). Header labels `MM-DD` sit on Mondays.
+**Action bar** (claude usage): one row under the detail strip holding every toggle and action as a button — never a letter key the user has to remember. Buttons per the Buttons rule; a choice between modes is a segmented control (`sort cost recent active`: dim label, then adjacent chips, active cyan on `selectionBg`, the rest dim on `surfaceAlt`). The view's actions sit left with 2-cell gaps, `↻ rescan` / `← back` flush right; actions that don't fit drop off the end. Keys stay as silent aliases and the footer shrinks to click / ↑↓ / enter / esc.
+
+**Heatmap** (claude usage timeline): project label column, then one 1–4-cell column per day — or 1–12 cells per Monday-start week in weeks mode — (sized to fill the panel), then a right-aligned total. Empty day `·` in `T.border`; activity `░▒` in `T.blue`, `▓█` in `T.cyan`, on a sqrt scale so small days still show. The cursor day is a `T.surface` column (`T.border` on the selected row). Header labels `MM-DD` sit on Mondays (on every week in weeks mode).
 
 **Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), and the footer advertises both.
 
