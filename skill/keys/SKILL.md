@@ -1,6 +1,6 @@
 ---
 name: keys
-description: Sal's API-key vault (`keys` CLI, from destedtui). Use whenever an AI/API key is involved — "new key", "make me a key", "make me a new ElevenLabs key for pickleball", "API key", "rotate the key", "revoke that key", "which key does X use", "is this key reused", a project missing OPENAI_API_KEY/ANTHROPIC_API_KEY/ELEVENLABS_API_KEY/etc. in its .env, or a key pasted into chat. One key per project per provider; the vault writes it into the project's gitignored .env. Never print, echo or paste a key value.
+description: Sal's API-key vault (`keys` CLI, from destedtui). Use whenever an AI/API key is involved — "new key", "make me a key", "make me a new ElevenLabs key for pickleball", "API key", "rotate the key", "revoke that key", "which key does X use", "is this key reused", "which projects are using usage / spending right now", "API spend", a project missing OPENAI_API_KEY/ANTHROPIC_API_KEY/ELEVENLABS_API_KEY/etc. in its .env, or a key pasted into chat. One key per project per provider; the vault writes it into the project's gitignored .env. Never print, echo or paste a key value.
 ---
 
 # keys — one vault for every AI API key
@@ -52,6 +52,7 @@ no other project shares the value).
 | What keys does a project use | `keys list --project <p>` (`--json` for parsing) |
 | Everything for one provider | `keys list --provider <id>` |
 | Keys shared across projects | `keys reuse` |
+| Which projects are spending right now | `keys usage` (`--project p` for its keys, `--refresh` to skip the 15-min cache, `--json`) — a `⚠ shared × N` line is one key used by N projects; its spend can't be split, the fix is a key per project |
 | Re-sync a project's `.env` from the vault | `keys env <project>` (`--dry-run` first if unsure) |
 | Revoke | `keys revoke <id>` (remote when possible; removes the `.env` line) |
 | Providers and which can mint | `keys providers` |

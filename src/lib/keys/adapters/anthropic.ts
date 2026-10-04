@@ -16,7 +16,8 @@ function headers(admin: AdminInput): Record<string, string> {
   return { "x-api-key": admin.value, "anthropic-version": "2023-06-01" };
 }
 
-function matchesHint(value: string, hint: string): boolean {
+/** True when a redacted hint ("sk-ant-api03-R2D...igAA") could be this value. Also used by usage matching. */
+export function matchesHint(value: string, hint: string): boolean {
   const cut = hint.indexOf("...");
   if (cut < 0) return false;
   const head = hint.slice(0, cut);

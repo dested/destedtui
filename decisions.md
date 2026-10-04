@@ -2,6 +2,16 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-04 — Keys usage: owners, a 15-minute cache, and estimates labelled as estimates
+Sal's calls: a Usage view on the Keys screen + `keys usage`, nothing in the brief; per project today / 7d / 24h / sparkline, $ where reported, raw units otherwise, hottest first; cache in `~/.destedtui/keys/usage.json` refreshed ~15 min or on demand; build Anthropic against an Admin key he'll add. Mine:
+- **Lines are owners, not keys.** A value live in N projects lands on one `⚠ shared × N` line and is never credited to a project — splitting it would invent numbers, and the shared line is exactly the thing to untangle. Unknown provider keys and no-key usage get their own lines instead of vanishing, so the total is honest.
+- **24h is an estimate** (today + the overlapping fraction of yesterday): every provider buckets $ by UTC day; OpenAI's costs endpoint only has `1d`. Labelled `24h≈` everywhere. Rejected: hourly token usage × a derived rate (per-model rates, more calls, still an estimate).
+- **Anthropic $ per key is allocated**: the cost report can't group by key, so each (day, model, token type) cost is split by that key's token share; non-token costs stay on the account line. Marked "allocated". Rejected: tokens only (Sal wants $), a hard-coded price table (goes stale).
+- **ElevenLabs uses the workspace analytics endpoint and matches by key name**: `character-stats` per-key came back empty, while `usage-by-product-over-time` grouped by `hashed_xi_api_key` returns per-key $ and credits. The hash isn't any plain digest of the key, so the name is the only join; unmatched keys show under their name. Minted keys are named `keys-<project>-<label>`, so they always match.
+- **OpenAI matches by redacted value** (prefix + last 4), refusing ambiguous matches; deleted keys (openai-image's ephemeral ones, mostly) group as one "deleted keys" line.
+- **OpenRouter's numbers are windows** (today, week to date) from `GET /api/v1/key` called with each key — no admin needed, but no day series, so no sparkline; its unnamed-key label is its own redacted value and is dropped before caching.
+- **The cache is plain JSON**, not DPAPI: it holds no secrets (provider key ids/names, vault key ids, numbers), and plain JSON can be inspected and deleted freely.
+
 ## 2026-10-03 — Keys vault: builder's calls made overnight (Sal asleep — eyeball these)
 The settled parts (DPAPI vault, `keys` bin, mint-where-possible, `.env` distribution) are Sal's, in `plans/2026-10-03-keys.md`. These are mine:
 - **`new` and `add` write the project's `.env` immediately** (`--no-env` opts out). The goal is "the key ends up in the .env"; a separate `keys env` step is one more thing for a Claude session to forget. `keys env` stays for re-syncs.

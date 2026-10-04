@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useKeyboard, useTerminalDimensions } from "@opentui/react";
 import { SPINNER_FRAMES, T } from "../theme.ts";
 import { Footer } from "../components/Footer.tsx";
+import { KeysUsage } from "./KeysUsage.tsx";
 import { fit, pad } from "../lib/text.ts";
 import { openInChrome } from "../lib/run.ts";
 import { clearClipboard, readClipboard } from "../lib/keys/win32.ts";
@@ -97,6 +98,7 @@ export function Keys({ cwd, back }: Props) {
   const [armed, setArmed] = useState<{ id: string; until: number } | null>(null);
   const [flash, setFlash] = useState<Flash | null>(null);
   const [form, setForm] = useState<Form | null>(null);
+  const [usage, setUsage] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
   const [frame, setFrame] = useState(0);
   const lastIndex = useRef(0);
@@ -284,7 +286,8 @@ export function Keys({ cwd, back }: Props) {
   };
 
   useKeyboard((key) => {
-    if (key.ctrl || busy) return;
+    // The Usage view owns the keyboard while it's up (useKeyboard fires for every mounted component).
+    if (usage || key.ctrl || busy) return;
 
     if (form) {
       const f = form;
@@ -329,6 +332,8 @@ export function Keys({ cwd, back }: Props) {
     switch (key.sequence) {
       case "q":
         return back();
+      case "u":
+        return setUsage(true);
       case "n":
         return openForm("new");
       case "a":
@@ -352,6 +357,8 @@ export function Keys({ cwd, back }: Props) {
         });
     }
   });
+
+  if (usage) return <KeysUsage close={() => setUsage(false)} />;
 
   const spin = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "·";
   const projectsCount = new Set(keys.map((k) => k.project)).size;
@@ -447,6 +454,7 @@ export function Keys({ cwd, back }: Props) {
                   ["i", "import"],
                   ["p", "provider"],
                   ["m", "admin"],
+                  ["u", "usage"],
                   ["esc", "back"],
                 ]
               : [
@@ -457,6 +465,7 @@ export function Keys({ cwd, back }: Props) {
                   ["x", "revoke"],
                   ["g", "group"],
                   ["i", "import"],
+                  ["u", "usage"],
                   ["esc", "back"],
                 ]
         }

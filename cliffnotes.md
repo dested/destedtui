@@ -15,13 +15,13 @@ Personal dev-project TUI for dested. Four jobs: (1) a **project picker** that li
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
 - **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys` (jump straight to a screen), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
-- **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set` for Claude sessions (the `keys` skill, source `skill/keys/`). Values never on argv or stdout — fingerprints only. Exit 0 ok / 1 user error / 2 provider API error
+- **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set`/`usage` for Claude sessions (the `keys` skill, source `skill/keys/`). Values never on argv or stdout — fingerprints only. Exit 0 ok / 1 user error / 2 provider API error
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
 - **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff)
 - **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. Windows-only.
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
-- **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock`; `KEYS_VAULT_DIR` overrides the folder
+- **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock` + `usage.json` (usage cache, no secrets, 15-min freshness); `KEYS_VAULT_DIR` overrides the folder
 
 ## Stack
 
@@ -81,6 +81,7 @@ src/
     Pull.tsx            pick .env db → name local target → dump+restore into localhost, one shot
     Review.tsx          code review: scope picker (live badges) → streaming reviewer feed → PASS/BLOCKED report + commit gate
     Keys.tsx            the key vault: rows grouped by project/provider, ⚠ reuse badges, .env/↗/✕ row buttons, forms that replace the list
+    KeysUsage.tsx       the Keys screen's Usage view (`u`): spend per owner, hottest first, sparklines, per-key detail strip
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all)
     ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd; kill-root chain walk, HTTP <title> probe, killServer
@@ -113,6 +114,7 @@ src/
       envfile.ts        .env upsert/remove preserving every other line; gitignore check via git check-ignore
       importer.ts       scan each project folder's .env* files (2 levels, SKIP_DIRS) and classify vars → providers
       errors.ts         UserError (exit 1) / ProviderError (exit 2)
+      usage/            per-provider usage fetchers (openai, anthropic, elevenlabs, openrouter, fal, xai) + cache.ts (usage.json) + view.ts (owners, 24h≈, sparkline) + index.ts (registry, fetchUsage/getUsage)
 ```
 
 ## File map (concept → path)
@@ -135,6 +137,8 @@ src/
 | The startup dev-fleet dashboard | `src/screens/Startup.tsx` (UI) + `src/lib/startup.ts` (the `startup` supervisor singleton) |
 | Which apps the dashboard boots / their ports | `src/lib/startup.ts` → `SPECS` (folder, command, url, desktop flag) |
 | The key vault (`keys`) | `src/keys.tsx` (bin) + `src/screens/Keys.tsx` + `src/lib/keys/` — spec in `features/keys.md` |
+| Usage per project / shared key | `src/lib/keys/usage/` (fetchers + `view.ts` owner logic) + `src/screens/KeysUsage.tsx` + `printUsage` in `src/keys.tsx` — `features/keys.md` § Usage |
+| Add a provider's usage API | one file in `src/lib/keys/usage/` exporting a `UsageFetcher` + a line in `usage/index.ts` |
 | Add a provider that can mint | one file in `src/lib/keys/adapters/` + a line in `adapters/index.ts` + `mint:` on the provider in `providers.ts` |
 | Which env var names map to a provider on import | `aliases`/`prefixes` in `src/lib/keys/providers.ts` + `classify` in `importer.ts` |
 | The localhost / port killer screen | `src/screens/Ports.tsx` (UI) + `src/lib/ports.ts` (scan, probe, kill) |

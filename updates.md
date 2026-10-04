@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-04 — Keys usage: which projects are spending right now
+Asked: usage per key and per project in keys — today, 7d, 24h, sparkline, $ where reported, hottest first, cached ~15 min. Done: `keys usage` + the Usage view (`u` on the Keys screen), `src/lib/keys/usage/` fetchers for OpenAI (costs per api_key_id, live), ElevenLabs (workspace analytics per hashed key, live), OpenRouter (/api/v1/key per key, live), Anthropic (usage + cost report, allocated; awaiting Admin key), fal + xAI (from docs, awaiting admin keys). Shared keys show as `⚠ shared × N`, never credited to one project. Cache `~/.destedtui/keys/usage.json`, no secrets. tsc green; tmux frames at 170×44 and 100×30.
+Touched: src/lib/keys/usage/**, src/screens/KeysUsage.tsx, src/screens/Keys.tsx, src/keys.tsx, src/lib/keys/adapters/anthropic.ts, skill/keys/SKILL.md, features/keys.md, decisions.md, cliffnotes.md, verify.md, ui.md
+
 ## 2026-10-03 — Keys: one vault for every AI API key
 Asked (overnight, plans/2026-10-03-keys.md): one place for every AI key, one per project per provider, mint where the provider allows, never through a transcript, written to the project's .env, Claude + PowerShell aware. Done: `keys` bin (list/new/add/env/revoke/reuse/import/providers/admin) + Keys screen (menu tile, `--keys`, "keys" in picker) + `keys` skill. DPAPI vault via bun:ffi, 5 backups, zod at every boundary. Adapters: OpenAI (mint → 200 → revoke → 401 verified live), xAI, OpenRouter, fal, ElevenLabs (from docs, unexercised), Anthropic (archive only). `keys import` for real: 98 keys in 65 projects, 20 values shared. tsc green; screen verified in tmux at 170×44 and 100×30.
 Touched: src/keys.tsx, src/screens/Keys.tsx, src/lib/keys/**, skill/keys/SKILL.md, src/App.tsx, src/routes.ts, src/index.tsx, src/screens/MainMenu.tsx, src/screens/Projects.tsx, src/lib/discovery.ts, package.json, cliffnotes.md, ui.md, decisions.md, verify.md, features/keys.md

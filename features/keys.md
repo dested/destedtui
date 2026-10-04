@@ -87,11 +87,58 @@ source, file + var, a red `⚠ same key in N projects`, and row buttons `.env` /
 Keys: `n` new/mint, `a` add from clipboard, `w` write .env, `o` console, `x` revoke
 (two-press, panel border red, status line says local-only vs remote), `i` import, `p` add
 provider, `m` admin credential from clipboard. Forms replace the list (CommandEditor
-pattern), choice fields cycle with ←/→.
+pattern), choice fields cycle with ←/→. `u` opens the Usage view.
+
+## Usage (2026-10-04)
+
+"Which of my projects are spending right now." `keys usage [--project p] [--provider x]
+[--days n] [--refresh] [--json]` and the Usage view on the Keys screen (`u`). Nothing in the
+morning brief or sal-agent (Sal's call).
+
+**Owners, not keys.** Providers report usage per provider-side key. Each key is matched to
+vault records, and the line it lands on is its owner:
+
+| Owner | When | Shown as |
+| --- | --- | --- |
+| project | the value is live in exactly one project | the project name |
+| shared | the value is live in N > 1 projects | `⚠ shared × N: a, b, c` in red — **never credited to any one project**; the detail strip says to give each its own key |
+| unmatched | a provider key the vault doesn't know (deleted, ephemeral like openai-image's, made in a console) | `<provider> · "<name>"`; ephemeral names collapse (`claude-imggen-ephemeral-*`), deleted keys group as `deleted keys (no longer listed)` |
+| account | usage credited to no key (web app, console, playground) | `<provider> · account (no key)` |
+
+`--project p` lists the lines that include p (its own line and every shared group it's in)
+with a per-key breakdown.
+
+**Columns.** 24h≈, today, N days (default 7), an N-day sparkline (`▁▂▃▄▅▆▇█`, `·` = nothing),
+providers, last used. Dollars where the provider reports cost; raw units otherwise (only
+when no provider on the line reports $). Sorted by 24h spend, then today, then the window, so
+what's burning now is on top. **24h is an estimate**: providers bucket by UTC day, so it's
+today + the part of yesterday still inside the last 24 hours.
+
+**Cache.** `~/.destedtui/keys/usage.json` (plain JSON, `usage/cache.ts`, zod on read). No
+secrets: provider key ids and names, vault key ids, numbers. A read older than 15 minutes
+(or covering fewer days than asked) refetches; `--refresh` / `r` forces it; the screen also
+refetches every 15 minutes while open. All providers fetch in parallel; one failing becomes
+a status line, never a failed run.
+
+**Providers** (verified against docs 2026-10-04; "live" = called for real tonight)
+
+| Provider | Scope | How | Match to vault | Evidence |
+| --- | --- | --- | --- | --- |
+| OpenAI | per key, $ | `GET /v1/organization/costs?group_by[]=api_key_id` (1d) + `GET /v1/organization/projects/{id}/api_keys` for names, `redacted_value`, `last_used_at` | redacted value (prefix + last 4; ambiguous ⇒ no match) | **live**: 200, 9 daily buckets, ~90 key-days; 9 keys listed |
+| ElevenLabs | per key, $ + credits | `POST /v1/workspace/analytics/query/usage-by-product-over-time` `group_by: ["hashed_xi_api_key"]`, daily → `total_cost` (usd), `total_usage` (credits), `api_key_name` | by **name** only: the hash isn't sha1/sha256/sha512/md5/sha3 of the key. A minted key's `keys-<project>-<label>` name, or a name equal to the project | **live**: 200, per-key rows incl. a key named "temp" ($65 in 7d) and no-key web usage. `/v1/usage/character-stats` `breakdown_type=api_keys` was empty, hence the newer endpoint |
+| Anthropic | per key, $ **allocated** | `GET /v1/organizations/usage_report/messages?group_by[]=api_key_id&group_by[]=model` (tokens) + `GET /v1/organizations/cost_report?group_by[]=description` (cents, can't group by key). Each (day, model, token type) cost is split by token share; non-token costs stay on the account line | `partial_key_hint` | needs an Admin key — "needs admin key" until Sal runs `keys admin set anthropic --clipboard` |
+| OpenRouter | per key, $ (windows) | `GET /api/v1/key` with each key itself: `usage_daily`, `usage_weekly` (UTC week to date) — no day series, so no sparkline and the window column is week-to-date | by value (we called with it) | **live**: 200 for the one OpenRouter value (CADAM + monte) |
+| fal | per key, $ | `GET api.fal.ai/v1/models/usage?timeframe=day&expand=time_series&expand=auth_method_structured` | key id = the part of the value before `:` | needs an ADMIN-scope key; unexercised |
+| xAI | account, $ | `POST management-api.x.ai/v1/billing/teams/{team}/usage` (usd sum per day); no documented per-key group | — | needs a management key; unexercised |
+| Gemini, Groq, Replicate, custom | none | no usage API | — | shows "no usage API" + console URL |
+
+Adding a provider: one file in `src/lib/keys/usage/` exporting a `UsageFetcher` + a line
+in `usage/index.ts`.
 
 ## Not built (next)
 
-- `keys push <project>` → Drydock env (SSM). Not tonight.
-- Usage / spend per key.
+- `keys push <project>` → Drydock env (SSM).
+- ElevenLabs keys whose name isn't the project (e.g. "temp") can't be matched — rename them
+  in the ElevenLabs console to the project name, or mint replacements with `keys new`.
 - Imported keys that live in two files of one project (`web/.env` + `.env.local`) are
   managed in the first file only; the second copy is reported as "already known".

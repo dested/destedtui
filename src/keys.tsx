@@ -9,6 +9,8 @@ import { App } from "./App.tsx";
 import { clearClipboard, readClipboard } from "./lib/keys/win32.ts";
 import { UserError } from "./lib/keys/errors.ts";
 import { findKey, readVault, reuseGroups, VAULT_PATH, type ReuseGroup } from "./lib/keys/vault.ts";
+import { DEFAULT_DAYS, getUsage } from "./lib/keys/usage/index.ts";
+import { ago, buildView, money, sparkline, units, type Money, type UsageLine, type UsageView } from "./lib/keys/usage/view.ts";
 import {
   adapterFor,
   addKey,
@@ -43,6 +45,9 @@ usage:
   keys env <project> [--dry-run]         write the project's active keys into its .env
   keys revoke <id> [--local-only]        revoke on the provider (when possible), mark it, drop its .env line
   keys reuse [--json]                    the same key used by more than one project
+  keys usage [--project p] [--provider x] [--days n] [--refresh] [--json]
+                                         spend per project, most recent first (cached 15 min;
+                                         a key shared by N projects shows as shared, never one's)
   keys import [--root dir] [--dry-run] [--json]
                                          scan every project's .env files and store what's there
   keys providers [--json]
@@ -72,6 +77,7 @@ const BOOL_FLAGS = new Set([
   "yes-print-secret",
   "help",
   "no-open",
+  "refresh",
 ]);
 const MULTI_FLAGS = new Set(["alias", "meta"]);
 
@@ -184,6 +190,41 @@ function printStored(r: StoreResult, verb: string): void {
   if (r.env) printEnv(r.env, false);
 }
 
+function usageCells(m: Money | null, u: (Money & { unit: string }) | null): string[] {
+  if (m) return [money(m.d24), money(m.today), money(m.window), sparkline(m.series)];
+  if (u) return [units(u.d24, u.unit), units(u.today, u.unit), units(u.window, u.unit), sparkline(u.series)];
+  return ["", "", "", ""];
+}
+
+function usageRow(label: string, cells: string[], tail: string, indent = ""): string {
+  const [d24 = "", today = "", win = "", spark = ""] = cells;
+  return `${indent}${label.length > 44 - indent.length ? `${label.slice(0, 43 - indent.length)}…` : label.padEnd(44 - indent.length)} ${d24.padStart(10)} ${today.padStart(10)} ${win.padStart(10)}  ${spark.padEnd(9)} ${tail}`;
+}
+
+function printUsage(v: UsageView, detail: boolean): void {
+  out(`usage · last ${v.days} days · fetched ${ago(v.fetchedAt)} · 24h is estimated from UTC day buckets`);
+  out(usageRow("", ["24h", "today", `${v.days}d`, `last ${v.days}d`], ""));
+  if (v.lines.length === 0) out("  nothing reported for this window");
+  for (const l of v.lines) {
+    const marks = [l.allocated ? "allocated" : "", l.weekToDate ? "week-to-date" : "", l.lastUsedAt ? `used ${ago(l.lastUsedAt)}` : ""].filter(Boolean).join(", ");
+    const label = l.kind === "shared" ? `⚠ ${l.label}` : l.label;
+    out(usageRow(label, usageCells(l.usd, l.units), `${l.providers.join("+")}${marks ? `  (${marks})` : ""}`));
+    if (detail || l.kind === "shared")
+      for (const k of l.keys) {
+        if (l.keys.length === 1 && !detail) break;
+        const who = `${k.providerId} ${k.vaultKeyIds[0] ?? k.remoteKeyId ?? "account"}${k.name ? ` "${k.name}"` : ""}`;
+        out(usageRow(who, usageCells(k.usd, k.units), k.matchedBy ? `matched by ${k.matchedBy}` : "", "    "));
+      }
+  }
+  out(usageRow("total ($ only)", usageCells(v.total, null), ""));
+  out();
+  for (const pr of v.providers) {
+    const state =
+      pr.status === "ok" ? (pr.scope === "per-key" ? "✓ per key" : "✓ account only") : pr.status === "needs-admin" ? "needs admin key" : pr.status === "no-api" ? "no usage API" : "✗ error";
+    out(`  ${pr.id.padEnd(11)} ${state}${pr.message ? ` — ${pr.message}` : ""}`);
+  }
+}
+
 // ─── commands ────────────────────────────────────────────────────────────────
 
 async function run(argv: string[]): Promise<number> {
@@ -269,6 +310,17 @@ async function run(argv: string[]): Promise<number> {
         out(`✓ revoked ${res.id} (${res.project}, fp ${res.fingerprint}) — ${res.remoteNote}`);
         if (res.envRemoved) out(`  removed its line from ${res.project}'s env file`);
       }
+      return 0;
+    }
+
+    case "usage": {
+      const raw = p.flags.get("days");
+      const days = raw === undefined ? DEFAULT_DAYS : Number.parseInt(raw, 10);
+      if (!Number.isInteger(days) || days < 1 || days > 31) throw new UserError("--days wants 1–31");
+      const cache = await getUsage({ days, refresh: p.bools.has("refresh") });
+      const view = buildView(cache, readVault(), { days, project: p.flags.get("project"), provider: p.flags.get("provider")?.toLowerCase() });
+      if (asJson) json(view);
+      else printUsage(view, Boolean(p.flags.get("project")));
       return 0;
     }
 

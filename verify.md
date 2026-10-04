@@ -73,6 +73,13 @@ Touchpoints: `src/keys.tsx`, `src/screens/Keys.tsx`, `src/lib/keys/`
 3. [cheap] TUI in tmux (`export MSYS_NO_PATHCONV=1`; the pane shell is pwsh, so set env with `$env:X='…'`): `bun run src/keys.tsx` at 170×44 and `bun run src/index.tsx --keys` at 100×30 — group headers, columns, ⚠ badges, row buttons flush right, footer. `g` regroups, `x` arms (red border + status line), `n` shows the form replacing the list, `esc` backs out.
 4. [live — spends nothing, touches the real org] `keys new openai --project <scratch>` with `OPENAI_ADMIN_KEY` set and the scratch vault → minted; probe `GET /v1/models` with the stored value from a script (print the status only) → 200; `keys revoke <id>` → "revoked on OpenAI"; probe again → 401. (Passed 2026-10-03.)
 
+### Keys usage [cheap — read-only provider calls]
+Touchpoints: `src/lib/keys/usage/`, `src/screens/KeysUsage.tsx`, `printUsage` in `src/keys.tsx`
+1. `keys usage --refresh` → table sorted by 24h, `⚠ shared × N` lines in red-flag form, a status line per provider (openai/elevenlabs/openrouter ✓ per key; anthropic/xai/fal "needs admin key" until set; gemini/groq/replicate "no usage API").
+2. `keys usage --project <p>` → its own line + every shared group it's in, with per-key rows and "matched by …". `--days 40` → exit 1. `--json` parses.
+3. No secrets in the cache: `grep -c -E 'sk-|sk_|xai-|gsk_|r8_' ~/.destedtui/keys/usage.json` → only the literal `sk-ant-admin…` hint text.
+4. tmux at 170×44 and 100×30: `bun run src/keys.tsx`, `u` → Usage view; ↓ onto a shared line → the detail strip says it can't be split and names the key; `u` back to the list (not `q` — that leaves the screen).
+
 ### Core-logic smoke (no DB needed) [medium]
 Touchpoints: `src/lib/discovery.ts`, `pgurl.ts`, `zip.ts`
 Write a scratch script (outside the repo) that builds a fake monorepo + `.env`, then asserts: `discover()` finds packages/dbs, `parsePgUrl` decodes an encoded password, and `createBackupZip` → `readZipMetadata` → `extractZipEntry` round-trips a few MB byte-identically.
