@@ -13,5 +13,6 @@ export type Route =
   | { name: "startup" }
   | { name: "term" }
   | { name: "ports" }
+  | { name: "keys" }
   | { name: "projects" }
   | { name: "review"; scope?: ReviewScope; autoStart?: boolean };

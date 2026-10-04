@@ -35,7 +35,7 @@ export interface Discovery {
   databases: DatabaseInfo[];
 }
 
-const SKIP_DIRS = new Set([
+export const SKIP_DIRS = new Set([
   "node_modules",
   ".git",
   "dist",
@@ -106,7 +106,7 @@ function detectPm(dir: string, root: string): PackageManager {
   return "bun";
 }
 
-function isEnvFile(name: string): boolean {
+export function isEnvFile(name: string): boolean {
   if (!name.startsWith(".env")) return false;
   if (name.includes("example") || name.includes("sample") || name.includes("template")) return false;
   return true;

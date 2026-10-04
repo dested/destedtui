@@ -65,6 +65,14 @@ Touchpoints: `src/review.tsx`, `src/screens/Review.tsx`, `src/lib/review*.ts`, `
 2. [cheap] In tmux: `review` in a dirty repo → picker renders with live badges (`N files`, `HEAD`, "gh unavailable" when gh is absent); esc quits clean.
 3. [heavy — ask first] `review --headless` in a repo with real changes — spawns a paid `claude-opus-4-8` run (2–10 min, ~$1+). Expect streaming `· Tool arg` lines, a report, exit 0/1 matching the findings.
 
+### Keys vault [cheap → live]
+Touchpoints: `src/keys.tsx`, `src/screens/Keys.tsx`, `src/lib/keys/`
+**Never print a value while verifying** — no `cat` of a `.env` (mask: `sed 's/=.*/=…/'`), no `reveal`.
+1. [cheap] Scratch vault + root: `export KEYS_VAULT_DIR=<scratch>/vault DESTEDTUI_PROJECTS_ROOT=<scratch>/root`, a few fake `.env` files (same fake value in two projects, a `VITE_*` alias, a placeholder like `your-key-here`). `keys import` → imports, skips the placeholder, reuse report names both projects. `keys list` shows ⚠ lines.
+2. [cheap] `echo <fake> | keys add groq --project alpha --stdin` → stored + `.env` line added + `.env` appended to `.gitignore`; again → exit 1 "already has an active"; with `--replace` → replaced line. `keys add groq --project alpha` (no input flag) → exit 1. `keys new gemini --project beta --no-open` → console next-step text, exit 0. `keys revoke <id of a shared key>` → "same value still active in …", `.env` line gone. `keys reveal <id> --yes-print-secret` inside Claude → exit 1. `ls <scratch>/vault` shows `vault.bin.1..` backups.
+3. [cheap] TUI in tmux (`export MSYS_NO_PATHCONV=1`; the pane shell is pwsh, so set env with `$env:X='…'`): `bun run src/keys.tsx` at 170×44 and `bun run src/index.tsx --keys` at 100×30 — group headers, columns, ⚠ badges, row buttons flush right, footer. `g` regroups, `x` arms (red border + status line), `n` shows the form replacing the list, `esc` backs out.
+4. [live — spends nothing, touches the real org] `keys new openai --project <scratch>` with `OPENAI_ADMIN_KEY` set and the scratch vault → minted; probe `GET /v1/models` with the stored value from a script (print the status only) → 200; `keys revoke <id>` → "revoked on OpenAI"; probe again → 401. (Passed 2026-10-03.)
+
 ### Core-logic smoke (no DB needed) [medium]
 Touchpoints: `src/lib/discovery.ts`, `pgurl.ts`, `zip.ts`
 Write a scratch script (outside the repo) that builds a fake monorepo + `.env`, then asserts: `discover()` finds packages/dbs, `parsePgUrl` decodes an encoded password, and `createBackupZip` → `readZipMetadata` → `extractZipEntry` round-trips a few MB byte-identically.

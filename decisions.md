@@ -2,6 +2,21 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-03 — Keys vault: builder's calls made overnight (Sal asleep — eyeball these)
+The settled parts (DPAPI vault, `keys` bin, mint-where-possible, `.env` distribution) are Sal's, in `plans/2026-10-03-keys.md`. These are mine:
+- **`new` and `add` write the project's `.env` immediately** (`--no-env` opts out). The goal is "the key ends up in the .env"; a separate `keys env` step is one more thing for a Claude session to forget. `keys env` stays for re-syncs.
+- **`--project` defaults to the cwd's project folder** (first segment under the projects root). Projects are matched case-insensitively and must exist as folders, or be `shared`.
+- **Remote revoke is skipped when another project still holds the same value.** Almost every imported key is shared (one ElevenLabs key is in 24 projects); revoking it remotely to clean up one project would break 23 others. Local mark + a printed reason instead.
+- **`--replace` rotates**: refuses a second key for (provider, project) without it. A mint that can't be stored is revoked again immediately.
+- **Import keeps one key per (project, provider)**: the shallowest plain `.env` wins; a different value elsewhere in the same project is reported as a conflict, not stored. Each key remembers its `envFile` and var name (`web/.env`, `VITE_OPENAI_API_KEY`) so `keys env` writes it back where the app reads it. Gemini is matched by var name only — `AIza` is every Google API key, Maps included.
+- **Admin credentials fall back to the adapter's user env var** (`OPENAI_ADMIN_KEY`, `ANTHROPIC_ADMIN_KEY`) when the vault has none — the openai-image skill already relies on `OPENAI_ADMIN_KEY`. `keys admin set <p> --from-env VAR` copies one into the vault; I did **not** run it for OpenAI (the session's permission layer blocked writing the admin key into a secret store), so minting reads the env var today.
+- **OpenAI keys are project service accounts in an existing OpenAI project** (meta `projectId` → one named like the Sal project → "Default project"), not a new OpenAI project per Sal project: OpenAI projects can be archived but never deleted, so auto-creating them would litter the org.
+- **`reveal` and `values` refuse when `CLAUDECODE` is set**, on top of `--yes-print-secret`. `values` (JSON on stdout) exists only for PowerShell's `Use-Keys`.
+- **Clipboard and DPAPI go through bun:ffi** (crypt32/user32/kernel32), like `lib/ports.ts` — no pwsh boot, and the secret never crosses a process pipe.
+- **The profile's `keys` alias for the cheatsheet became `cheat`** (sals-powershell-setup): aliases outrank executables, so the alias would have shadowed the bin. F1 is unchanged.
+- **Screen accent is orange** (shared with restore; never on screen together), and its list is a custom table like the localhost screen, not `ListPicker`, because rows need their own buttons and group headers that navigation skips.
+**Rejected:** a master password (Sal's call: DPAPI only); printing values for convenience in any mode a Claude session can reach; auto-creating OpenAI projects; letting import store two keys for one provider in one project.
+
 ## 2026-10-03 — Localhost scanner reads Win32 through bun:ffi, not netstat/PowerShell
 **Why:** the screen polls (servers come and go while you watch) and needs what no single command gives: listening ports + owning pid, the parent chain, and each process's **working directory** — which Windows only exposes inside the process's own PEB. `Get-CimInstance Win32_Process` + `Get-NetTCPConnection` costs a pwsh boot (~0.5–1s) per poll and still has no cwd. So `lib/ports.ts` calls `GetExtendedTcpTable` (v4+v6 listeners), `CreateToolhelp32Snapshot` (pid/ppid/exe) and `NtQueryInformationProcess` + `ReadProcessMemory` (cmdline + cwd from the PEB) directly. Full scan ≈35ms, zero subprocesses; cmdline/cwd cached per pid+start-time.
 **Kill = the dev-command chain, not just the listener.** Killing only `node vite` lets a watcher (`bun --watch`, nodemon, next) respawn it and leaves `bun run dev` holding the terminal. `x` climbs parents while they're node/bun/`cmd /c` and stops before this tui's ancestry, any shell, or a claude process; the UI states the exact target and every other port in that tree before the second press. `shift+x` is the listener-only escape hatch.

@@ -63,6 +63,14 @@ export function MainMenu({ discovery, go, quit }: Props) {
       badgeColor: T.blue,
     },
     {
+      id: "keys",
+      icon: "◆",
+      title: "Keys",
+      subtitle: "every AI API key — one per project, minted where possible, written to .env",
+      badge: "dpapi vault",
+      badgeColor: T.orange,
+    },
+    {
       id: "scripts",
       icon: "▶",
       title: "Scripts",
@@ -136,6 +144,7 @@ export function MainMenu({ discovery, go, quit }: Props) {
             else if (item.id === "startup") go({ name: "startup" });
             else if (item.id === "term") go({ name: "term" });
             else if (item.id === "ports") go({ name: "ports" });
+            else if (item.id === "keys") go({ name: "keys" });
             else if (item.id === "scripts") go({ name: "scripts" });
             else if (item.id === "backup") go({ name: "backup" });
             else if (item.id === "restore") go({ name: "restore" });

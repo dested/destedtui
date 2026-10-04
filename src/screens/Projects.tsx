@@ -42,6 +42,8 @@ interface Props {
   openTerm: () => void;
   /** Opens the localhost servers screen (typed "ports"). */
   openPorts: () => void;
+  /** Opens the API-key vault (typed "keys"). */
+  openKeys: () => void;
   /** esc: pop back to the menu, or quit when this screen IS the app. */
   leave: () => void;
 }
@@ -68,6 +70,13 @@ const ACTIONS: ActionSpec[] = [
     subtitle: "every node/bun localhost server — open, cd, kill",
     icon: "◉",
     keywords: ["localhost", "servers", "kill", "port", "listening", "node", "bun"],
+  },
+  {
+    id: "keys",
+    title: "keys",
+    subtitle: "every AI API key — one per project, mint, write .env",
+    icon: "◆",
+    keywords: ["api", "key", "secret", "token", "vault", "openai", "anthropic", "elevenlabs"],
   },
 ];
 
@@ -104,7 +113,7 @@ type Cell =
   | { kind: "command"; key: string; shortcut: CommandShortcut; positions: number[] }
   | { kind: "action"; key: string; action: ActionSpec; positions: number[] };
 
-export function Projects({ root, cwd, choose, run, openStartup, openTerm, openPorts, leave }: Props) {
+export function Projects({ root, cwd, choose, run, openStartup, openTerm, openPorts, openKeys, leave }: Props) {
   // Scanned during the first render, not in an effect: painting an empty grid
   // and filling it a frame later leaves torn cards behind, and 220 folders cost
   // ~50ms — far below anything you can see.
@@ -227,6 +236,7 @@ export function Projects({ root, cwd, choose, run, openStartup, openTerm, openPo
     if (action.id === "startup") openStartup();
     else if (action.id === "term") openTerm();
     else if (action.id === "ports") openPorts();
+    else if (action.id === "keys") openKeys();
   };
 
   const openCell = (cell: Cell) => {

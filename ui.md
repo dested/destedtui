@@ -33,7 +33,7 @@
 | `T.teal` | `#73daca` | projects accent (title, active filter border, sort mode) |
 | `T.pink` | `#ff007c` | review accent (Tokyo Night magenta) |
 
-Accent discipline: each screen owns one accent for its border title (`titleColor`) — menu purple, projects teal, scripts green, backup blue, restore orange, process cyan, review pink, localhost blue (the palette ran out; backup and localhost are never on screen together). Status colors are earned by state, never used for decoration.
+Accent discipline: each screen owns one accent for its border title (`titleColor`) — menu purple, projects teal, scripts green, backup blue, restore orange, process cyan, review pink, localhost blue (the palette ran out; backup and localhost are never on screen together), keys orange (shared with restore, same reasoning). Status colors are earned by state, never used for decoration.
 
 ## Layout
 
@@ -77,7 +77,7 @@ A box paints only the rect it occupies; opentui does not clear what a shrinking 
 | `Highlighted` | `src/components/Highlight.tsx` | a padded line with matched characters in a second colour |
 | `ProgressBar` | `src/components/ProgressBar.tsx` | flat block bar + dim percent |
 
-Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ▸ ⛁ ↺ ⎇ ☰ ✕ ✎ ◈ ◇ ▣ ◷ ↻ ⌂ ⚠). Health dots (localhost): `●` green = answered HTTP, `●` red = 5xx, `◌` yellow = accepted but silent, `○` dim = not HTTP, spinner = probing. Project rows: `◈` git repo, `◇` plain folder; the badge is the detected stack, coloured per language. Command rows: `▸`.
+Signature row (ListPicker item): `❯ ▶ title  dim-subtitle` … `badge` — icons are single unicode glyphs (▶ ▸ ⛁ ↺ ⎇ ☰ ✕ ✎ ◈ ◇ ▣ ◷ ↻ ⌂ ⚠). Health dots (localhost): `●` green = answered HTTP, `●` red = 5xx, `◌` yellow = accepted but silent, `○` dim = not HTTP, spinner = probing. Project rows: `◈` git repo, `◇` plain folder; the badge is the detected stack, coloured per language. Command rows: `▸`. Keys: `◆` group headers in orange, the fingerprint is the only identifier shown (cyan when selected), reuse warnings `⚠ same key in N projects` in red (it's a security problem, not decoration), shortened to `⚠ N projects` on a narrow terminal.
 
 **Check the width before adding a glyph.** `⚡` and `＋` are double-width and push the rest of a fixed-width line off its right edge — `⚡` cost the command card its badge; `☰` measured two cells in the review picker and shoved the badge column (use `≡`). If in doubt, render it in a card and count cells.
 

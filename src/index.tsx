@@ -16,6 +16,7 @@ Usage:
   destedtui --startup   boot all your dev servers in a live console dashboard
   destedtui --term      terminal multiplexer: shells & claude sessions in panes
   destedtui --ports     every node/bun localhost server — open, cd, kill
+  destedtui --keys      the API-key vault (also its own bin: keys --help)
   destedtui --backup    jump straight to Postgres backup
   destedtui --restore   jump straight to Postgres restore
   destedtui --local     browse localhost Postgres databases
@@ -60,6 +61,7 @@ if (args.includes("--projects") || args.includes("--cd") || args.includes("-p"))
 else if (args.includes("--startup")) initialRoute = { name: "startup" };
 else if (args.includes("--term")) initialRoute = { name: "term" };
 else if (args.includes("--ports")) initialRoute = { name: "ports" };
+else if (args.includes("--keys")) initialRoute = { name: "keys" };
 else if (args.includes("--restore")) initialRoute = { name: "restore" };
 else if (args.includes("--backup")) initialRoute = { name: "backup" };
 else if (args.includes("--local")) initialRoute = { name: "localdb" };

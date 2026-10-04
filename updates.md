@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-03 — Keys: one vault for every AI API key
+Asked (overnight, plans/2026-10-03-keys.md): one place for every AI key, one per project per provider, mint where the provider allows, never through a transcript, written to the project's .env, Claude + PowerShell aware. Done: `keys` bin (list/new/add/env/revoke/reuse/import/providers/admin) + Keys screen (menu tile, `--keys`, "keys" in picker) + `keys` skill. DPAPI vault via bun:ffi, 5 backups, zod at every boundary. Adapters: OpenAI (mint → 200 → revoke → 401 verified live), xAI, OpenRouter, fal, ElevenLabs (from docs, unexercised), Anthropic (archive only). `keys import` for real: 98 keys in 65 projects, 20 values shared. tsc green; screen verified in tmux at 170×44 and 100×30.
+Touched: src/keys.tsx, src/screens/Keys.tsx, src/lib/keys/**, skill/keys/SKILL.md, src/App.tsx, src/routes.ts, src/index.tsx, src/screens/MainMenu.tsx, src/screens/Projects.tsx, src/lib/discovery.ts, package.json, cliffnotes.md, ui.md, decisions.md, verify.md, features/keys.md
+
 ## 2026-10-03 — Localhost screen (the "Port killer" tile, built)
 Asked: every localhost server from a node/bun process, with links + working directory, pretty, killable. Done: `ports` screen — live table (title probe, cwd, command, uptime, mem) + detail pane with clickable links (LAN url when exposed) and the kill chain; two-press `x` kills the dev-command chain, `shift+x` the listener; `/` filter, `s` sort, `a` all listeners, `g` cd there. Scanner is pure bun:ffi into Win32 (~35ms). Entry: menu tile, `--ports`, `ports` shell fn, "ports" in picker. tsc green; verified in tmux incl. a real kill of a throwaway chain.
 Touched: src/lib/ports.ts, src/screens/Ports.tsx, src/App.tsx, src/routes.ts, src/index.tsx, src/screens/MainMenu.tsx, src/screens/Projects.tsx, shell/destedtui.ps1, cliffnotes.md, ui.md, decisions.md, verify.md

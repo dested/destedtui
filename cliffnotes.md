@@ -5,7 +5,7 @@
 
 ## What this is
 
-Personal dev-project TUI for dested. Three jobs: (1) a **project picker** that lists everything in `g:\code` ranked by how often you open it, fuzzy-filters it, carries your saved command shortcuts, and `cd`s the shell there — it auto-launches in every new terminal that starts in `g:\code`; (2) `cd` into any project and run `destedtui` for per-project utilities — a monorepo-aware package.json script runner and Postgres backup/restore driven by `.env` `DATABASE_URL`s (pg client tools auto-downloaded per server major version so dumps are never version-mismatched); (3) a second global bin, **`review`** — a clean-context code review of the current repo by a fresh headless `claude-opus-4-8` process, with scope picking (uncommitted/staged/commits/branch/PR), a streaming activity feed, and a gated in-TUI commit. See [features/review.md](features/review.md).
+Personal dev-project TUI for dested. Four jobs: (1) a **project picker** that lists everything in `g:\code` ranked by how often you open it, fuzzy-filters it, carries your saved command shortcuts, and `cd`s the shell there — it auto-launches in every new terminal that starts in `g:\code`; (2) `cd` into any project and run `destedtui` for per-project utilities — a monorepo-aware package.json script runner and Postgres backup/restore driven by `.env` `DATABASE_URL`s (pg client tools auto-downloaded per server major version so dumps are never version-mismatched); (3) a second global bin, **`review`** — a clean-context code review of the current repo by a fresh headless `claude-opus-4-8` process, with scope picking (uncommitted/staged/commits/branch/PR), a streaming activity feed, and a gated in-TUI commit. See [features/review.md](features/review.md); (4) a third global bin, **`keys`** — a DPAPI-encrypted vault for every AI API key, one per project per provider, minted through provider admin APIs where they exist and written into each project's `.env`. See [features/keys.md](features/keys.md).
 
 ## Quick Reference
 
@@ -13,13 +13,15 @@ Personal dev-project TUI for dested. Three jobs: (1) a **project picker** that l
 - **Entry point:** `src/index.tsx` → arg parsing → `createCliRenderer` → `<App/>`
 - **Type-check:** `bun x tsc --noEmit`
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
-- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--backup`, `--restore`, `--local`, `--pull`, `--review` (jump straight to a screen), `--install-shell`, `--help`, `--version`
+- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys` (jump straight to a screen), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
+- **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set` for Claude sessions (the `keys` skill, source `skill/keys/`). Values never on argv or stdout — fingerprints only. Exit 0 ok / 1 user error / 2 provider API error
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
 - **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff)
 - **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. Windows-only.
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
+- **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock`; `KEYS_VAULT_DIR` overrides the folder
 
 ## Stack
 
@@ -37,6 +39,8 @@ Personal dev-project TUI for dested. Three jobs: (1) a **project picker** that l
 ## Directory structure
 
 ```
+skill/
+  keys/SKILL.md         the `keys` Claude skill; junctioned into ~/.claude/skills/keys (sals-powershell-setup install.ps1 `$externalSkills`)
 prompts/
   review.md             reviewer prompt template ({{SCOPE}}, {{DIFF_COMMANDS}} placeholders)
   reviewer-settings.json reviewer permissions: read-only allowlist + explicit deny of mutations
@@ -48,6 +52,7 @@ shell/
 src/
   index.tsx             CLI entry: --help/--version/--projects/--backup/--restore/--local/--pull/--review/--install-shell
   review.tsx            the `review` bin: scope flags, --headless path, or boots the TUI on the review route
+  keys.tsx              the `keys` bin: the vault CLI, or boots the TUI on the keys route
   App.tsx               Route stack (push/pop), discovery kickoff, chooseProject (cd + exit), global ctrl+c quit
   routes.ts             Route union type (backup/restore carry optional presets)
   theme.ts              T = Tokyo Night palette + SPINNER_FRAMES (single source of color truth)
@@ -75,6 +80,7 @@ src/
     LocalDb.tsx         localhost DB browser: list/create/drop + edit connection; launches backup/restore per DB
     Pull.tsx            pick .env db → name local target → dump+restore into localhost, one shot
     Review.tsx          code review: scope picker (live badges) → streaming reviewer feed → PASS/BLOCKED report + commit gate
+    Keys.tsx            the key vault: rows grouped by project/provider, ⚠ reuse badges, .env/↗/✕ row buttons, forms that replace the list
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all)
     ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd; kill-root chain walk, HTTP <title> probe, killServer
@@ -98,6 +104,15 @@ src/
     reviewHeadless.ts   --headless path: ANSI report renderer + runHeadless (exit codes)
     run.ts              Bun.spawn wrappers: runScript/runCommand (line streaming), runTool, openInChrome, treeKill, trackProcess, killAll
     zip.ts              fflate streaming: createBackupZip, readZipMetadata, extractZipEntry
+    keys/
+      vault.ts          zod vault schema, DPAPI read, locked atomic write + 5 backups, fingerprint, reuseGroups
+      win32.ts          bun:ffi: CryptProtectData/CryptUnprotectData + clipboard read/clear/write
+      ops.ts            every operation (new/add/env/revoke/import/admin/providers) — shared by CLI + screen
+      providers.ts      the 9 built-in providers (env var, aliases, value prefixes, console URL, adapter)
+      adapters/         one MintAdapter per provider with an admin API (openai, elevenlabs, xai, openrouter, fal, anthropic=revoke only) + index.ts registry
+      envfile.ts        .env upsert/remove preserving every other line; gitignore check via git check-ignore
+      importer.ts       scan each project folder's .env* files (2 levels, SKIP_DIRS) and classify vars → providers
+      errors.ts         UserError (exit 1) / ProviderError (exit 2)
 ```
 
 ## File map (concept → path)
@@ -119,6 +134,9 @@ src/
 | The `/sal-review` Claude skill | `~/.claude/skills/sal-review/SKILL.md` → `review --headless` |
 | The startup dev-fleet dashboard | `src/screens/Startup.tsx` (UI) + `src/lib/startup.ts` (the `startup` supervisor singleton) |
 | Which apps the dashboard boots / their ports | `src/lib/startup.ts` → `SPECS` (folder, command, url, desktop flag) |
+| The key vault (`keys`) | `src/keys.tsx` (bin) + `src/screens/Keys.tsx` + `src/lib/keys/` — spec in `features/keys.md` |
+| Add a provider that can mint | one file in `src/lib/keys/adapters/` + a line in `adapters/index.ts` + `mint:` on the provider in `providers.ts` |
+| Which env var names map to a provider on import | `aliases`/`prefixes` in `src/lib/keys/providers.ts` + `classify` in `importer.ts` |
 | The localhost / port killer screen | `src/screens/Ports.tsx` (UI) + `src/lib/ports.ts` (scan, probe, kill) |
 | What `x` kills on the localhost screen | `findKillRoot` + `isLauncher` in `lib/ports.ts` — climbs node/bun/`cmd /c` parents, never into this tui's ancestry, a shell, or a claude process |
 | Reading another process's cwd / command line | `inspect` in `lib/ports.ts` (PEB offsets, x64) |
@@ -165,6 +183,9 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 | `ProcHandle` | `lib/run.ts` | pid + kill() + exited promise |
 | `ProjectInfo` / `ProjectDetail` / `SortMode` | `lib/projects.ts` | picker rows, git pane, sort cycling |
 | `ReviewScope` / `ReviewResult` / `ReviewOutcome` | `lib/review.ts` | review scope union, the reviewer's zod-parsed output, verdict+cost |
+| `Vault` / `KeyRecord` / `Provider` / `AdminCredential` | `lib/keys/vault.ts` | zod-validated vault contents (values inside — never render them) |
+| `KeyView` | `lib/keys/ops.ts` | value-free key row every list/screen/`--json` uses |
+| `MintAdapter` | `lib/keys/adapters/types.ts` | one provider's admin API: mint / revoke / locate |
 
 ## Gotchas & hard rules
 
@@ -197,6 +218,10 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Driving the TUI from Git Bash + tmux: `export MSYS_NO_PATHCONV=1` first.** MSYS rewrites a bare `/` argument to `C:/Program Files/Git/`, so `tmux send-keys '/'` types those letters into the app (on the localhost screen `o` opened Chrome and `g` cd'd away). Never send keys to a TUI session you can't see — tear down with `tmux kill-session`; two queued `Escape`s can coalesce and leave the app reading your next shell line as hotkeys.
 - **The localhost scanner's PEB offsets are x64** (`ProcessParameters` @0x20, `CurrentDirectory` @0x38, `CommandLine` @0x70). A 32-bit target would need the WOW64 PEB; node/bun are 64-bit, and a failed read just leaves cwd empty (row shows `·`). Processes owned by SYSTEM/other users can't be opened — same empty result, by design.
 - **HTTP probes mark a port `http` the moment headers arrive** and read `<title>` best-effort from the first chunks — an SSR stream may never end, and timing out the body used to misreport live servers as "not http". Self-signed TLS (portless :443) is accepted.
+- **The key vault never shows a value.** Lists, screen, `--json`, errors: fingerprints only. `reveal`/`values` need `--yes-print-secret` and refuse when `CLAUDECODE` is set. Keys enter via clipboard (`--clipboard`, cleared after) or `--stdin`, never argv. Provider error bodies are echoed only for non-2xx (a 2xx body may hold the key).
+- **Test the vault against a scratch dir:** `KEYS_VAULT_DIR=<scratch>/vault DESTEDTUI_PROJECTS_ROOT=<scratch>/root`. The real vault is at `~/.destedtui/keys`.
+- **Remote revoke is skipped while the same value is active in another project** — imported keys are mostly shared; revoking one remotely would break the rest.
+- Windows clipboard history (Win+V) keeps its own copy of anything copied; `keys add --clipboard` clears the live clipboard only.
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 
 ## Status
@@ -206,5 +231,6 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Done** Terminal multiplexer (`term`) — interactive shells & `claude` sessions in panes, add/switch/close, mouse-driven, guaranteed cleanup. tile + `--term` + typing "term" in the picker. Verified end-to-end in tmux (typed commands run, per-pane isolation, 0 orphans on quit/abrupt-close). Live `claude` spawn not auto-tested (would burn tokens) — plumbing is identical to shells.
 - **Done** [Review](features/review.md) — clean-context `claude-opus-4-8` code review as a second global bin (`review`): scope picker (uncommitted/staged/last commit/recent commits/branch/PR via gh), streaming tool feed, PASS/BLOCKED report, gated commit, `--headless` for the `/sal-review` skill. Absorbed from the retired `G:\code\sal-review` repo 2026-08-06; ledger dropped (see decisions.md).
 - **Done** Localhost (`ports`) — every node/bun listener with URL, page title, cwd, command, uptime, memory; `x` kills the whole dev-command chain (two-press; names exactly what dies + other ports in the same tree), `shift+x` just the listener; `a` shows every TCP listener. Menu tile + `--ports` + `ports` shell fn + typing "ports" in the picker. Verified in tmux: 200×46 and 100×30 renders, filter, keyboard + mouse kill of a throwaway `bun run dev` chain, `g` cd handoff.
+- **Done** [Keys](features/keys.md) — `keys` bin + screen + skill + PowerShell `Use-Keys`. OpenAI mint → 200 → revoke → 401 verified live; `keys import` run for real (98 keys, 65 projects, 20 shared values). xAI/OpenRouter/fal/ElevenLabs adapters built from docs but not exercised (no admin credentials).
 - **Not built** (menu shows "coming soon"): Git dashboard, .env inspector, node_modules nuker
 - **Next:** whichever coming-soon tile the user picks

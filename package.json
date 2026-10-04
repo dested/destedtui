@@ -5,7 +5,8 @@
   "type": "module",
   "bin": {
     "destedtui": "./src/index.tsx",
-    "review": "./src/review.tsx"
+    "review": "./src/review.tsx",
+    "keys": "./src/keys.tsx"
   },
   "scripts": {
     "dev": "bun run src/index.tsx",
