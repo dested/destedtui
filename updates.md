@@ -2,6 +2,19 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-09-12 — sal-board joins the startup fleet
+Asked: "add sal-board to startup". Done: SPECS entry in src/lib/startup.ts — folder sal-board, `bun run dev` (its scripts/dev.ts wraps portless + revives the proxy), open button hits https://board.localhost. Its "board.localhost" stdout line trips READY_RE's `localhost` branch. tsc green.
+Touched: src/lib/startup.ts, cliffnotes.md, updates.md
+
+## 2026-08-12 — clipspeak in, then out of the startup fleet
+Asked: "add clipspeak to startup in destedtui", then approved packaging it
+properly instead. Done: SPECS entry added, then removed same session —
+ClipSpeak (the new global-hotkey clipboard TTS app, G:\code\clipspeak,
+github.com/dested/clipspeak) is now a real installed exe with Windows
+auto-start on login (HKCU Run, `--hidden` to tray), so the fleet entry would
+only fight its single-instance lock. Net zero diff to SPECS. tsc green.
+Touched: src/lib/startup.ts (net unchanged), cliffnotes.md, updates.md
+
 ## 2026-08-06 — review knowledge made session-independent
 Asked: "does destedtui have enough understanding of the review product? make a feature doc so I can delete this claude session." Done: features/review.md gains **Quality bar** (the raw-session benchmark standard behind prompt v2: coverage = peak findings, merge/deploy notes first-class, never truncate model output, re-benchmark after prompt changes) and **Accepted risks / open questions** (settings prefix-glob write vector, ListPicker burst-input stale-enter, carried-over ideas); cliffnotes gotcha points at it. Everything the originating session knew now lives in the repo.
 Touched: features/review.md, cliffnotes.md

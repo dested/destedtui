@@ -1,7 +1,7 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-08-06.
+> Last updated: 2026-09-12.
 
 ## What this is
 
@@ -193,7 +193,7 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 ## Status
 
 - **Done** [Project picker](features/project-picker.md) · [Script runner](features/script-runner.md) · [PG backup](features/pg-backup.md) · [PG restore](features/pg-restore.md) — e2e verified against local PostgreSQL 18.3
-- **Done** Startup dashboard — boots/babysits the 5 dev servers (todolist/deck/drydock/chirptime/sal-widgets); tile + `--startup` + typing "startup" in the picker. Layout verified in tmux; live console + Chrome launch not auto-smoke-tested (would spawn real servers).
+- **Done** Startup dashboard — boots/babysits the 6 dev servers (todolist/deck/drydock/chirptime/sal-widgets/sal-board); tile + `--startup` + typing "startup" in the picker. Layout verified in tmux; live console + Chrome launch not auto-smoke-tested (would spawn real servers).
 - **Done** Terminal multiplexer (`term`) — interactive shells & `claude` sessions in panes, add/switch/close, mouse-driven, guaranteed cleanup. tile + `--term` + typing "term" in the picker. Verified end-to-end in tmux (typed commands run, per-pane isolation, 0 orphans on quit/abrupt-close). Live `claude` spawn not auto-tested (would burn tokens) — plumbing is identical to shells.
 - **Done** [Review](features/review.md) — clean-context `claude-opus-4-8` code review as a second global bin (`review`): scope picker (uncommitted/staged/last commit/recent commits/branch/PR via gh), streaming tool feed, PASS/BLOCKED report, gated commit, `--headless` for the `/sal-review` skill. Absorbed from the retired `G:\code\sal-review` repo 2026-08-06; ledger dropped (see decisions.md).
 - **Not built** (menu shows "coming soon"): Git dashboard, Port killer, .env inspector, node_modules nuker

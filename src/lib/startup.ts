@@ -30,6 +30,7 @@ const SPECS: Omit<AppSpec, "dir">[] = [
   { id: "drydock", folder: "drydock", name: "drydock", command: "bun run dev", url: "http://localhost:4400", desktop: false, note: "bun · :4400", accent: T.cyan },
   { id: "chirptime", folder: "chirptime", name: "chirptime", command: "bun run dev", desktop: true, note: "tauri · window", accent: T.orange },
   { id: "sal-widgets", folder: "sal-widgets", name: "sal-widgets", command: "bun run dev", desktop: true, note: "electron · window", accent: T.blue },
+  { id: "sal-board", folder: "sal-board", name: "sal-board", command: "bun run dev", url: "https://board.localhost", desktop: false, note: "bun · board.localhost", accent: T.yellow },
 ];
 
 export const APPS: AppSpec[] = SPECS.map((s) => ({ ...s, dir: join(projectsRoot(), s.folder) }));
