@@ -13,6 +13,7 @@ export type Route =
   | { name: "startup" }
   | { name: "term" }
   | { name: "ports" }
+  | { name: "procs" }
   | { name: "keys"; rotate?: { fingerprint?: string; dead?: boolean; simulate?: boolean } }
   | { name: "projects" }
   | { name: "claude" }

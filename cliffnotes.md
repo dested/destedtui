@@ -19,6 +19,7 @@ Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that li
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
 - **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff)
 - **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. Windows-only. `--ports --json` prints one scan with page titles as versioned JSON (`lib/ports-json.ts`), read by sal-agent's https://sal.localhost/ports; add fields, never rename them
+- **Claude procs (`procs`, `--procs`):** what every Claude Code session spun up — one group per CLI `claude.exe` (its tool shells, servers, watchers), orphan groups per project (parent gone), dev work outside Claude. Live CPU (% of one core, smoothed), memory, ports, flags (hot, ×N dupes, daemon, mcp, bg = nohup'd from that session's scratchpad); two-press kill per unit, per group, or every orphan leftover (no port, not a daemon). `lib/procs.ts` on top of `processTable()` in `lib/ports.ts`. See [features/procs.md](features/procs.md)
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
 - **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock` + `usage.json` (usage cache, no secrets, 15-min freshness) + `drydock.json` (Drydock apps → folders, env as var → fingerprint, 15-min freshness); `KEYS_VAULT_DIR` overrides the folder; `DRYDOCK_URL` overrides the portal (`http://localhost:4400/trpc`)
@@ -72,6 +73,7 @@ src/
   screens/
     MainMenu.tsx        utility tiles incl. disabled "coming soon" rows
     Startup.tsx         dev-fleet dashboard: rail of app cards (dot/spinner/buttons) + live console pane
+    Procs.tsx           claude procs: grouped tree (session → units) with cpu/mem/up + ✕ row buttons, detail pane (flags explained, process tree); ✕ all per group, ✕ orphan leftovers in the bar
     Ports.tsx           localhost servers: live table (port/project/command/rt/up/mem + ↗ ✕ row buttons) + detail pane (title, links, cwd, kill chain); two-press kill, / filter, g = cd there
     Term.tsx            terminal multiplexer: rail of session CARDS (rename ✎, close ✕, live age) + active PTY pane with a note strip above it, nav/input modes, ctrl+b leader. No auto-spawn — starts empty.
     Projects.tsx        g:\code card grid: own type-ahead, hover, wheel, click/enter = cd + quit
@@ -88,7 +90,9 @@ src/
     KeysRotate.tsx      the rotate screen (`R`): shared keys → overview/plan → confirmed walk → revoke; dead-key batch (`d`); --simulate
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all)
-    ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd; kill-root chain walk, HTTP <title> probe, killServer
+    ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd (+ CPU time); kill-root chain walk, HTTP <title> probe, killServer; processTable() = every process for procs
+    procs.ts            claude procs: ProcSampler (cpu rates between scans), session metadata (~/.claude/sessions, ~/.sal/status cards), units/groups/flags, killRoots (one batched taskkill), leftoverUnits
+    proctext.ts         prettyCommand / projectOf / leaf / exeName, shared by ports + procs
     term.ts             terminal multiplexer brain: `term` singleton — sessions, xterm emulators, active/mode, create/close, per-session notes (persist by title)
     ptyhost.ts          Bun-side client for the Node pty sidecar: spawns it, frames JSON, tree-kills it on exit
     projects.ts         scan g:\code, stack detect, frecency (own opens + zoxide), matchProject, inspectProject
@@ -161,6 +165,8 @@ src/
 | The localhost / port killer screen | `src/screens/Ports.tsx` (UI) + `src/lib/ports.ts` (scan, probe, kill) |
 | What `x` kills on the localhost screen | `findKillRoot` + `isLauncher` in `lib/ports.ts` — climbs node/bun/`cmd /c` parents, never into this tui's ancestry, a shell, or a claude process |
 | Reading another process's cwd / command line | `inspect` in `lib/ports.ts` (PEB offsets, x64) |
+| Which session a process belongs to / why it's an orphan | `classify` in `lib/procs.ts`: nearest CLI claude ancestor, else climb launch wrappers to a root; dead parent = orphan; scratchpad path traces it back to its session |
+| What the procs bulk kills skip | `killableUnits` (mcp, daemon, service) + `leftoverUnits` (also anything listening) in `lib/procs.ts` |
 | A built-in picker action (type "startup") | `ACTIONS` + `matchAction` in `src/screens/Projects.tsx`, card in `components/ActionCard.tsx` |
 | Open a URL in Chrome | `src/lib/run.ts` → `openInChrome` |
 | Run an arbitrary long-lived command | `src/lib/run.ts` → `runCommand` (tracked in `running`, tree-killed on quit) |

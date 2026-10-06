@@ -15,6 +15,7 @@ import { Pull } from "./screens/Pull.tsx";
 import { Startup } from "./screens/Startup.tsx";
 import { Term } from "./screens/Term.tsx";
 import { Ports } from "./screens/Ports.tsx";
+import { Procs } from "./screens/Procs.tsx";
 import { Projects } from "./screens/Projects.tsx";
 import { Review } from "./screens/Review.tsx";
 import { Keys } from "./screens/Keys.tsx";
@@ -100,6 +101,7 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
       {route.name === "startup" && <Startup back={stack.length > 1 ? back : quit} />}
       {route.name === "term" && <Term cwd={cwd} back={stack.length > 1 ? back : quit} />}
       {route.name === "ports" && <Ports choose={chooseProject} back={stack.length > 1 ? back : quit} />}
+      {route.name === "procs" && <Procs choose={chooseProject} back={stack.length > 1 ? back : quit} />}
       {route.name === "keys" && <Keys cwd={cwd} rotate={route.rotate} back={stack.length > 1 ? back : quit} />}
       {route.name === "claude" && <ClaudeUsage choose={chooseProject} back={stack.length > 1 ? back : quit} />}
       {route.name === "review" && (

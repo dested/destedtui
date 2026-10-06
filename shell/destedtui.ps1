@@ -7,6 +7,7 @@
 #   dested         short alias for the destedtui bin (dested --backup, etc.)
 #   term           jump straight into the terminal multiplexer, here
 #   ports          every node/bun server listening on localhost — open, cd, kill
+#   procs          what every claude session spun up — cpu, orphans, kill
 #   auto-launch    the picker opens by itself when a new shell starts in the
 #                  projects root (that's Windows Terminal's startingDirectory)
 #
@@ -78,6 +79,12 @@ function term {
 # "cd there" hands the folder back through the same temp-file trick as `proj`.
 function ports {
     Invoke-DestedTuiCd '--ports'
+}
+
+# `procs` shows what every Claude session spun up (servers, watchers, orphans)
+# with live CPU, and kills them. "cd there" uses the same handoff.
+function procs {
+    Invoke-DestedTuiCd '--procs'
 }
 
 function Test-DestedTuiAutostart {

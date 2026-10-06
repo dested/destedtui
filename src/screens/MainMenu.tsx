@@ -63,6 +63,14 @@ export function MainMenu({ discovery, go, quit }: Props) {
       badgeColor: T.blue,
     },
     {
+      id: "procs",
+      icon: "▲",
+      title: "Claude procs",
+      subtitle: "what every claude session spun up — cpu hogs, dupes, orphans, kill",
+      badge: "live",
+      badgeColor: T.cyan,
+    },
+    {
       id: "keys",
       icon: "◆",
       title: "Keys",
@@ -152,6 +160,7 @@ export function MainMenu({ discovery, go, quit }: Props) {
             else if (item.id === "startup") go({ name: "startup" });
             else if (item.id === "term") go({ name: "term" });
             else if (item.id === "ports") go({ name: "ports" });
+            else if (item.id === "procs") go({ name: "procs" });
             else if (item.id === "keys") go({ name: "keys" });
             else if (item.id === "claude") go({ name: "claude" });
             else if (item.id === "scripts") go({ name: "scripts" });

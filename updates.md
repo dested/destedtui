@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-05 — Claude procs screen
+Asked (from sal-agent): the PC is slow with ~50 agents running; show what Claude spun up, which session, and kill it. Done: `destedtui --procs` / `procs` / menu tile. `lib/procs.ts` groups every process by CLI claude session (status-card label), orphans per project, and outside Claude, with smoothed CPU rates, memory, ports and flags (hot, ×N dupes, daemon, mcp, bg, old). Kills take two presses (row, group ✕ all, orphan leftovers), skip mcp/daemon/service in bulk, and run as one batched taskkill. `ports.ts` gained `cpuMs` + `processTable()`; naming helpers moved to `lib/proctext.ts`. tsc green; headless frames checked at 180/170/100 cols; arming verified, nothing killed in tests.
+Touched: src/lib/{procs,proctext,ports}.ts, src/screens/{Procs,Ports,MainMenu}.tsx, src/{App,index}.tsx, src/routes.ts, shell/destedtui.ps1, scripts/snap-claude.tsx, cliffnotes.md, ui.md, features/procs.md
+
 ## 2026-10-05 — `--ports --json`
 Asked (from sal-agent): a port list on https://sal.localhost. Done: `destedtui --ports --json` prints one scan (pid, runtime, cmdline, cwd, start time, memory, listeners, url, page title; `--all` for every listener) as versioned JSON (`v: 1`) and exits; `runProbe` is exported with a timeout (1.5 s per server here). sal-agent's /ports page reads it. tsc green.
 Touched: src/index.tsx, src/lib/ports.ts, src/lib/ports-json.ts, cliffnotes.md

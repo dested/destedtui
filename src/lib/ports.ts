@@ -31,6 +31,8 @@ export interface ProcInfo {
   startedAt: number;
   /** working set bytes, 0 when unreadable */
   memory: number;
+  /** kernel + user CPU time so far, ms (0 when unreadable) — diff two scans for a rate */
+  cpuMs: number;
 }
 
 export interface Server {
@@ -233,7 +235,7 @@ function readUnicodeString(w: Win32, h: Pointer, header: DataView, offset: numbe
 const detailCache = new Map<string, { cmdline: string; cwd: string; startedAt: number }>();
 
 function inspect(w: Win32, e: Entry): ProcInfo {
-  const info: ProcInfo = { pid: e.pid, ppid: e.ppid, exe: e.exe, cmdline: "", cwd: "", startedAt: 0, memory: 0 };
+  const info: ProcInfo = { pid: e.pid, ppid: e.ppid, exe: e.exe, cmdline: "", cwd: "", startedAt: 0, memory: 0, cpuMs: 0 };
   const h =
     w.k.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, e.pid) ??
     w.k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, e.pid);
@@ -243,6 +245,7 @@ function inspect(w: Win32, e: Entry): ProcInfo {
     if (w.k.GetProcessTimes(h, ptr(times, 0), ptr(times, 8), ptr(times, 16), ptr(times, 24))) {
       const ft = times[0] ?? 0n;
       if (ft > FILETIME_EPOCH) info.startedAt = Number((ft - FILETIME_EPOCH) / 10000n);
+      info.cpuMs = Number(((times[2] ?? 0n) + (times[3] ?? 0n)) / 10000n);
     }
 
     // PROCESS_MEMORY_COUNTERS: WorkingSetSize (SIZE_T) at offset 16, struct is 72 bytes.
@@ -403,6 +406,39 @@ export function scanServers(opts: ScanOptions): Scan {
 
   servers.sort((a, b) => (a.listeners[0]?.port ?? 0) - (b.listeners[0]?.port ?? 0));
   return { servers, at, error: null };
+}
+
+// ─── every process (the procs screen) ─────────────────────────────────────────
+
+export interface ProcessTable {
+  procs: Map<number, ProcInfo>;
+  /** pid → listening ports, sorted */
+  ports: Map<number, number[]>;
+  at: number;
+  error: string | null;
+}
+
+/** Every process on the box, inspected (cmdline/cwd cached per pid+start), plus who listens where. */
+export function processTable(): ProcessTable {
+  const at = Date.now();
+  const procs = new Map<number, ProcInfo>();
+  const ports = new Map<number, number[]>();
+  if (!isWin) return { procs, ports, at, error: "process scanning is Windows-only for now" };
+  const w = api();
+  if (!w) return { procs, ports, at, error: `couldn't load Win32 APIs: ${win32Error ?? "unknown"}` };
+  for (const e of snapshot(w).values()) {
+    if (e.pid === 0 || e.pid === 4) continue;
+    procs.set(e.pid, inspect(w, e));
+  }
+  for (const [pid, byPort] of listenersByPid(w)) ports.set(pid, [...byPort.keys()].sort((a, b) => a - b));
+  // Dead pids would otherwise pin their cmdline/cwd forever.
+  if (detailCache.size > procs.size * 2) {
+    for (const key of detailCache.keys()) {
+      const pid = Number(key.slice(0, key.indexOf(":")));
+      if (!procs.has(pid)) detailCache.delete(key);
+    }
+  }
+  return { procs, ports, at, error: null };
 }
 
 // ─── helpers for the screen ───────────────────────────────────────────────────
