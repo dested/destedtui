@@ -460,11 +460,12 @@ export function probe(pid: number, port: number): Probe | null {
   return entry.result;
 }
 
-async function runProbe(port: number): Promise<Probe> {
+/** One uncached GET for the page <title>. The screen goes through `probe`; one-shot callers (--ports --json) await this. */
+export async function runProbe(port: number, timeoutMs = PROBE_TIMEOUT_MS): Promise<Probe> {
   let res: Response;
   try {
     res = await fetch(urlFor(port), {
-      signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
+      signal: AbortSignal.timeout(timeoutMs),
       redirect: "follow",
       headers: { accept: "text/html,*/*" },
       // portless and friends serve self-signed certs on 443.

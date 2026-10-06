@@ -16,6 +16,7 @@ Usage:
   destedtui --startup   boot all your dev servers in a live console dashboard
   destedtui --term      terminal multiplexer: shells & claude sessions in panes
   destedtui --ports     every node/bun localhost server — open, cd, kill
+                        (--json prints one scan with page titles, --all every listener)
   destedtui --keys      the API-key vault (also its own bin: keys --help)
   destedtui --backup    jump straight to Postgres backup
   destedtui --restore   jump straight to Postgres restore
@@ -56,6 +57,11 @@ if (args.includes("--install-shell")) {
     stdin: "inherit",
   });
   process.exit(proc.exitCode ?? 0);
+}
+
+if (args.includes("--ports") && args.includes("--json")) {
+  const { runPortsJson } = await import("./lib/ports-json.ts");
+  process.exit(await runPortsJson(args));
 }
 
 if (args.includes("--usage")) {

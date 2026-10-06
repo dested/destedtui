@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-05 — `--ports --json`
+Asked (from sal-agent): a port list on https://sal.localhost. Done: `destedtui --ports --json` prints one scan (pid, runtime, cmdline, cwd, start time, memory, listeners, url, page title; `--all` for every listener) as versioned JSON (`v: 1`) and exits; `runProbe` is exported with a timeout (1.5 s per server here). sal-agent's /ports page reads it. tsc green.
+Touched: src/index.tsx, src/lib/ports.ts, src/lib/ports-json.ts, cliffnotes.md
+
 ## 2026-10-04 — Buttons over letter keys: Localhost, Keys, Keys usage, Rotate, Terminals
 Asked: the same button treatment for the other screens. Done: shared `components/ActionBar.tsx` (btn / seg); Localhost bar (node+bun | all, sort) + filter row + copy/cd in the detail pane; Keys bar (new, paste, usage, rotate, import, group, provider, admin) + form go/cancel + clickable fields and ‹ › choices; Rotate's bar drives its keyboard state machine (one code path, arming intact) + row clicks (open, pick, plan, ⛔ override); Usage refresh/back; Terminals back button, clickable note, button empty state. Fixed my own bug from the previous entry: row actions sat in the Claude usage bar, where hover-select retargets them — now on the row (`↪`), and a second click on the timeline cursor cell drills in. Footers cut to click/↑↓/enter/esc. tsc green; clicks verified headless (rotate in simulate).
 Touched: src/components/ActionBar.tsx, src/screens/{ClaudeUsage,Ports,Keys,KeysUsage,KeysRotate,Term}.tsx, scripts/snap-claude.tsx, ui.md, cliffnotes.md, features/keys.md, features/claude-usage.md, verify.md
