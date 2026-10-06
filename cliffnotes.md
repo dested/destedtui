@@ -162,6 +162,7 @@ src/
 | Add a provider's usage API | one file in `src/lib/keys/usage/` exporting a `UsageFetcher` + a line in `usage/index.ts` |
 | Add a provider that can mint | one file in `src/lib/keys/adapters/` + a line in `adapters/index.ts` + `mint:` on the provider in `providers.ts` |
 | Which env var names map to a provider on import | `aliases`/`prefixes` in `src/lib/keys/providers.ts` + `classify` in `importer.ts` |
+| A second CLI name for a provider (`jev` → `typesafe`) | `PROVIDER_ID_ALIASES` in `src/lib/keys/providers.ts` (read by `getProvider`/`viewKeys` in `ops.ts`) |
 | The localhost / port killer screen | `src/screens/Ports.tsx` (UI) + `src/lib/ports.ts` (scan, probe, kill) |
 | What `x` kills on the localhost screen | `findKillRoot` + `isLauncher` in `lib/ports.ts` — climbs node/bun/`cmd /c` parents, never into this tui's ancestry, a shell, or a claude process |
 | Reading another process's cwd / command line | `inspect` in `lib/ports.ts` (PEB offsets, x64) |

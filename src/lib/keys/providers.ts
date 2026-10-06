@@ -94,4 +94,20 @@ export const BUILTIN_PROVIDERS: Provider[] = [
     mint: "fal",
     builtin: true,
   },
+  {
+    // TypeSafe AI's Jev (System One). Env var from the SDK constants (typesafe_sdk.constants.API_KEY_ENV).
+    // No key-management API (2026-10-06): console-only.
+    id: "typesafe",
+    name: "TypeSafe (Jev)",
+    envVar: "TYPESAFE_API_KEY",
+    aliases: ["JEV_API_KEY", "TYPESAFE_KEY"],
+    prefixes: [],
+    consoleUrl: "https://console.typesafe.ai/keys",
+    builtin: true,
+  },
 ];
+
+/** Other names a built-in provider answers to on the command line (`keys new jev`). */
+export const PROVIDER_ID_ALIASES: Readonly<Record<string, string>> = {
+  jev: "typesafe",
+};

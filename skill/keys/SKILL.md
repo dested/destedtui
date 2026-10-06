@@ -72,7 +72,7 @@ no other project shares the value).
 - **Mint:** OpenAI (project service account; admin from `OPENAI_ADMIN_KEY` or the
   vault), xAI (management key), OpenRouter (management key), fal (admin-scope key),
   ElevenLabs (service accounts — multi-seat plans only; Sal's plan may not allow it).
-- **Console only:** Anthropic (Admin API can archive but not create — `revoke`
+- **Console only:** TypeSafe (`typesafe`, alias `jev`; `TYPESAFE_API_KEY`), Anthropic (Admin API can archive but not create — `revoke`
   archives when an Anthropic admin key is set), Google Gemini, Groq, Replicate, and
   every custom provider.
 

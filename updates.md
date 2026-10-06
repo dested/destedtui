@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-06 — keys: TypeSafe (Jev) provider
+Asked (from sal-agent): a `typesafe` provider (alias `jev`) for TypeSafe AI's Jev. Done: built-in provider, `TYPESAFE_API_KEY` (SDK constants; import also matches `JEV_API_KEY`/`TYPESAFE_KEY`), console-only (no key API) → `console.typesafe.ai/keys`; verify = `GET api.typesafe.ai/v1/models` (bogus key → 401 confirmed). Provider-id aliases (`PROVIDER_ID_ALIASES`) resolve in `getProvider` and `list --provider`. No usage API exposed. tsc green.
+Touched: src/lib/keys/{providers,verify,ops}.ts, features/keys.md, skill/keys/SKILL.md
+
 ## 2026-10-05 — Claude procs screen
 Asked (from sal-agent): the PC is slow with ~50 agents running; show what Claude spun up, which session, and kill it. Done: `destedtui --procs` / `procs` / menu tile. `lib/procs.ts` groups every process by CLI claude session (status-card label), orphans per project, and outside Claude, with smoothed CPU rates, memory, ports and flags (hot, ×N dupes, daemon, mcp, bg, old). Kills take two presses (row, group ✕ all, orphan leftovers), skip mcp/daemon/service in bulk, and run as one batched taskkill. `ports.ts` gained `cpuMs` + `processTable()`; naming helpers moved to `lib/proctext.ts`. tsc green; headless frames checked at 180/170/100 cols; arming verified, nothing killed in tests.
 Touched: src/lib/{procs,proctext,ports}.ts, src/screens/{Procs,Ports,MainMenu}.tsx, src/{App,index}.tsx, src/routes.ts, shell/destedtui.ps1, scripts/snap-claude.tsx, cliffnotes.md, ui.md, features/procs.md

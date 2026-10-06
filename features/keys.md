@@ -83,6 +83,7 @@ Fingerprint = first 12 hex of sha256(value). It is the only thing any list shows
 | Google Gemini | no | API Keys API needs GCP OAuth — out of scope | console |
 | Groq | no | no documented key API | console |
 | Replicate | no | tokens are dashboard-only | console |
+| TypeSafe (Jev) — `typesafe`, alias `jev` | no | no key-management API in docs.typesafe.ai (2026-10-06); env var `TYPESAFE_API_KEY` per the SDK constants | console (`console.typesafe.ai/keys`) |
 
 Adding an adapter: one file in `src/lib/keys/adapters/` exporting a `MintAdapter`
 (`mint`, `revoke`, optional `locate`) + one line in `adapters/index.ts` + `mint: "<id>"` on
@@ -212,7 +213,7 @@ the same step. One project at a time, `enter` before each step that changes anyt
 4. **verify** — one cheap authenticated read with the new key (`src/lib/keys/verify.ts`:
    OpenAI/Groq `GET /models`, Anthropic `GET /v1/models`, ElevenLabs `GET /v1/models`, Gemini
    `GET /v1beta/models`, xAI `GET /v1/api-key`, OpenRouter `GET /api/v1/key`, Replicate
-   `GET /v1/account`). Status code only; a 401 is retried twice (fresh keys propagate). fal and
+   `GET /v1/account`, TypeSafe `GET api.typesafe.ai/v1/models`). Status code only; a 401 is retried twice (fresh keys propagate). fal and
    custom providers have no cheap check: marked "unverified", not failed.
 
 A failed step records the error on that project and stays the next step. Progress reads

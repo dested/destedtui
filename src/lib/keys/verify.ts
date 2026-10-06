@@ -18,6 +18,7 @@ export const CHECKS: Record<string, Check> = {
   groq: { method: "GET", url: "https://api.groq.com/openai/v1/models", headers: bearer },
   openrouter: { method: "GET", url: "https://openrouter.ai/api/v1/key", headers: bearer },
   replicate: { method: "GET", url: "https://api.replicate.com/v1/account", headers: bearer },
+  typesafe: { method: "GET", url: "https://api.typesafe.ai/v1/models", headers: bearer },
 };
 
 export interface VerifyResult {

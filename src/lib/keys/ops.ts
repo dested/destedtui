@@ -9,6 +9,7 @@ import { ADAPTERS, type AdminInput, type MintAdapter } from "./adapters/index.ts
 import { ProviderError, UserError } from "./errors.ts";
 import { ensureIgnored, removeFromEnv, upsertEnv, type EnvPlan, type IgnoreResult } from "./envfile.ts";
 import { scanEnvFiles, type Finding } from "./importer.ts";
+import { PROVIDER_ID_ALIASES } from "./providers.ts";
 import {
   envVarFor,
   findKey,
@@ -68,7 +69,8 @@ function sameProject(a: string, b: string): boolean {
 // ─── providers / admin ───────────────────────────────────────────────────────
 
 export function getProvider(v: Vault, id: string): Provider {
-  const p = providerById(v, id.toLowerCase());
+  const lower = id.toLowerCase();
+  const p = providerById(v, PROVIDER_ID_ALIASES[lower] ?? lower);
   if (!p) throw new UserError(`unknown provider "${id}" — keys providers lists them; keys provider add makes one`);
   return p;
 }
@@ -159,10 +161,12 @@ export interface KeyView {
 /** The value-free shape every list, screen and --json output uses. */
 export function viewKeys(v: Vault, opts: { project?: string; provider?: string; all?: boolean } = {}): KeyView[] {
   const groups = new Map(reuseGroups(v).map((g) => [g.fingerprint, g]));
+  const provider = opts.provider?.toLowerCase();
+  const providerId = provider && (PROVIDER_ID_ALIASES[provider] ?? provider);
   return v.keys
     .filter((k) => opts.all || isActive(k))
     .filter((k) => !opts.project || sameProject(k.project, opts.project))
-    .filter((k) => !opts.provider || k.providerId === opts.provider.toLowerCase())
+    .filter((k) => !providerId || k.providerId === providerId)
     .map((k) => ({
       id: k.id,
       providerId: k.providerId,
