@@ -67,7 +67,7 @@ Fingerprint = first 12 hex of sha256(value). It is the only thing any list shows
 - `.env` writes preserve every other line, comment and line ending; `revoke` removes a line
   only if it still holds the revoked value. `.env` is added to `.gitignore` when
   `git check-ignore` says it isn't ignored; a committed `.env` is flagged loudly.
-- `reveal` / `values` need `--yes-print-secret` and refuse when `CLAUDECODE` is set.
+- `reveal <id>` prints the value and copies it; `copy <id>` only copies. Inside Claude Code (`CLAUDECODE` set) reveal copies without printing. The screen's ⧉ row button (`c`) copies and shows the value in the status line. `values` still needs `--yes-print-secret` and refuses inside Claude Code.
 - Exit codes: 0 ok, 1 user error, 2 provider/API error.
 
 ## Provider admin APIs (researched 2026-10-03, docs fetched that night)

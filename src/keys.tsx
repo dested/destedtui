@@ -1,12 +1,12 @@
 #!/usr/bin/env bun
 // `keys` — Sal's API-key vault. Non-interactive first: Claude sessions drive it.
-// No value ever reaches stdout except through `reveal --yes-print-secret` and
-// `values --yes-print-secret`, and both refuse to run inside Claude Code.
+// Values reach stdout only through `reveal` and `values --yes-print-secret`;
+// neither prints inside Claude Code (reveal still copies to the clipboard there).
 
 import { createCliRenderer } from "@opentui/core";
 import { createRoot } from "@opentui/react";
 import { App } from "./App.tsx";
-import { clearClipboard, readClipboard } from "./lib/keys/win32.ts";
+import { clearClipboard, readClipboard, writeClipboard } from "./lib/keys/win32.ts";
 import { UserError } from "./lib/keys/errors.ts";
 import { findKey, readVault, reuseGroups, VAULT_PATH, type ReuseGroup } from "./lib/keys/vault.ts";
 import { DEFAULT_DAYS, getUsage } from "./lib/keys/usage/index.ts";
@@ -86,10 +86,11 @@ usage:
   keys admin list
   keys admin set <provider> (--clipboard | --stdin | --from-env VAR) [--meta k=v]...
   keys admin remove <provider>
-  keys reveal <id> --yes-print-secret    print one value (never inside Claude Code)
+  keys reveal <id>                       print one value + copy it to the clipboard
+  keys copy <id>                         copy one value to the clipboard
 
 --project defaults to the project folder you're standing in (under the projects root).
-Values are never shown — fingerprints (sha256 prefix) only. The value never goes on argv.
+Lists show fingerprints (sha256 prefix); reveal/copy (or ⧉ in the screen) for the value. The value never goes on argv.
 
 exit codes: 0 ok · 1 usage / user error · 2 provider API error`;
 
@@ -655,10 +656,13 @@ async function run(argv: string[]): Promise<number> {
       throw new UserError(`unknown: keys admin ${sub}`);
     }
 
-    case "reveal": {
-      if (!p.bools.has("yes-print-secret")) throw new UserError("reveal prints a secret — add --yes-print-secret if you really mean it");
-      if (insideClaude()) throw new UserError("refusing: reveal never runs inside Claude Code (secrets don't go in transcripts)");
-      out(findKey(readVault(), need(p, 1, "key id")).value);
+    case "reveal":
+    case "copy": {
+      // Copies always; prints too, except inside Claude Code (stdout there lands in the transcript).
+      const key = findKey(readVault(), need(p, 1, "key id"));
+      await writeClipboard(key.value);
+      if (cmd === "reveal" && !insideClaude()) out(key.value);
+      out(`⧉ ${key.id} (${key.providerId}/${key.project}) copied to the clipboard`);
       return 0;
     }
 

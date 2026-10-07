@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-06 — keys: show + copy values
+Asked: stop hiding key values from Sal on his own machine; show it and copy it. Done: ⧉ row button (`c`) on the Keys screen copies the value and shows it in the status line; `keys reveal <id>` no longer needs `--yes-print-secret` and also copies; new `keys copy <id>`. Inside Claude Code reveal copies but doesn't print. tsc green; row layout checked headless.
+Touched: src/screens/Keys.tsx, src/keys.tsx, cliffnotes.md, features/keys.md
+
 ## 2026-10-06 — keys: TypeSafe (Jev) provider
 Asked (from sal-agent): a `typesafe` provider (alias `jev`) for TypeSafe AI's Jev. Done: built-in provider, `TYPESAFE_API_KEY` (SDK constants; import also matches `JEV_API_KEY`/`TYPESAFE_KEY`), console-only (no key API) → `console.typesafe.ai/keys`; verify = `GET api.typesafe.ai/v1/models` (bogus key → 401 confirmed). Provider-id aliases (`PROVIDER_ID_ALIASES`) resolve in `getProvider` and `list --provider`. No usage API exposed. tsc green.
 Touched: src/lib/keys/{providers,verify,ops}.ts, features/keys.md, skill/keys/SKILL.md

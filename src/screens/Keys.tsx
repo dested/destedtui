@@ -8,8 +8,8 @@ import { KeysRotate } from "./KeysRotate.tsx";
 import { cachedDrydock, deployedFolders } from "../lib/keys/deployed.ts";
 import { fit, pad } from "../lib/text.ts";
 import { openInChrome } from "../lib/run.ts";
-import { clearClipboard, readClipboard } from "../lib/keys/win32.ts";
-import { readVault, reuseGroups, type Provider, type Vault } from "../lib/keys/vault.ts";
+import { clearClipboard, readClipboard, writeClipboard } from "../lib/keys/win32.ts";
+import { findKey, readVault, reuseGroups, type Provider, type Vault } from "../lib/keys/vault.ts";
 import {
   addKey,
   addProvider,
@@ -283,6 +283,16 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
     });
   };
 
+  /** Copy the value to the clipboard and show it in the status line. */
+  const copyValue = (k: KeyView | null) => {
+    if (!k) return;
+    work(`copying ${k.id}`, async () => {
+      const value = findKey(readVault(), k.id).value;
+      await writeClipboard(value);
+      return `⧉ copied ${k.providerId}/${k.project}: ${value}`;
+    });
+  };
+
   const openConsole = (k: KeyView | null) => {
     const p = providers.find((x) => x.id === (k?.providerId ?? defaultProvider));
     if (!p) return;
@@ -361,6 +371,8 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
         return writeDotEnv(current);
       case "o":
         return openConsole(current);
+      case "c":
+        return copyValue(current);
       case "g":
         return setGroup((g) => (g === "project" ? "provider" : "project"));
       case "i":
@@ -466,6 +478,10 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
                     writeDotEnv(row.k);
                   }}
                   onConsole={() => openConsole(row.k)}
+                  onCopy={() => {
+                    setSelectedId(row.k.id);
+                    copyValue(row.k);
+                  }}
                   onRevoke={() => {
                     setSelectedId(row.k.id);
                     revoke(row.k);
@@ -514,7 +530,7 @@ const WHO_W = 14; // provider (by project) or project (by provider)
 const ID_W = 12;
 const FP_W = 14;
 const SRC_W = 9;
-const BTN_W = 15; // " " + [ .env ] + " " + [ ↗ ] + " " + [ ✕? ]
+const BTN_W = 19; // " " + [ ⧉ ] + " " + [ .env ] + " " + [ ↗ ] + " " + [ ✕? ]
 
 /** The reuse warning, shortened to fit the column on a narrow terminal. */
 function shareText(k: KeyView, room: number): string {
@@ -537,7 +553,7 @@ function columnHeader(width: number, group: Group): string {
 function Summary({ width, keys, projects, shared, group }: { width: number; keys: number; projects: number; shared: number; group: Group }) {
   const left = `${keys} key${keys === 1 ? "" : "s"} · ${projects} project${projects === 1 ? "" : "s"}`;
   const warn = shared ? ` · ⚠ ${shared} shared between projects` : "";
-  const right = `by ${group} · values never shown`;
+  const right = `by ${group} · ⧉ copies + shows a value`;
   const gap = Math.max(1, width - left.length - warn.length - right.length);
   return (
     <box style={{ flexDirection: "row", height: 1, width }}>
@@ -572,6 +588,7 @@ function KeyRow({
   onHover,
   onEnv,
   onConsole,
+  onCopy,
   onRevoke,
 }: {
   k: KeyView;
@@ -582,6 +599,7 @@ function KeyRow({
   onHover: () => void;
   onEnv: () => void;
   onConsole: () => void;
+  onCopy: () => void;
   onRevoke: () => void;
 }) {
   const who = group === "project" ? k.providerId : k.project;
@@ -602,6 +620,8 @@ function KeyRow({
         <span fg={T.dim}>{pad(file, fw)}</span>
         <span fg={T.red}>{pad(share, Math.max(0, rest))}</span>
       </text>
+      <RowButton label="⧉" color={T.yellow} width={3} onPress={onCopy} />
+      <box style={{ width: 1, height: 1 }} />
       <RowButton label=".env" color={T.green} width={6} onPress={onEnv} />
       <box style={{ width: 1, height: 1 }} />
       <RowButton label="↗" color={T.cyan} width={3} onPress={onConsole} />
