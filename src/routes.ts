@@ -15,6 +15,7 @@ export type Route =
   | { name: "ports" }
   | { name: "procs" }
   | { name: "bx"; log?: boolean }
+  | { name: "bxProfiles" }
   | { name: "keys"; rotate?: { fingerprint?: string; dead?: boolean; simulate?: boolean } }
   | { name: "projects" }
   | { name: "claude" }

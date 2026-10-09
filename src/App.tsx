@@ -17,6 +17,7 @@ import { Term } from "./screens/Term.tsx";
 import { Ports } from "./screens/Ports.tsx";
 import { Procs } from "./screens/Procs.tsx";
 import { Bx } from "./screens/Bx.tsx";
+import { BxProfiles } from "./screens/BxProfiles.tsx";
 import { Projects } from "./screens/Projects.tsx";
 import { Review } from "./screens/Review.tsx";
 import { Keys } from "./screens/Keys.tsx";
@@ -103,7 +104,8 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
       {route.name === "term" && <Term cwd={cwd} back={stack.length > 1 ? back : quit} />}
       {route.name === "ports" && <Ports choose={chooseProject} back={stack.length > 1 ? back : quit} />}
       {route.name === "procs" && <Procs choose={chooseProject} back={stack.length > 1 ? back : quit} />}
-      {route.name === "bx" && <Bx log={route.log} back={stack.length > 1 ? back : quit} />}
+      {route.name === "bx" && <Bx log={route.log} profiles={() => go({ name: "bxProfiles" })} back={stack.length > 1 ? back : quit} />}
+      {route.name === "bxProfiles" && <BxProfiles back={stack.length > 1 ? back : quit} />}
       {route.name === "keys" && <Keys cwd={cwd} rotate={route.rotate} back={stack.length > 1 ? back : quit} />}
       {route.name === "claude" && <ClaudeUsage choose={chooseProject} back={stack.length > 1 ? back : quit} />}
       {route.name === "review" && (

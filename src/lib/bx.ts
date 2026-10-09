@@ -123,6 +123,9 @@ const DebugSchema = z.object({
   internals: z.object({
     actionLog: z.number(),
     actionLogChars: z.number(),
+    /** absent on daemons from before the cap (their log is never trimmed) */
+    actionLogDropped: z.number().optional(),
+    actionLogCap: z.number().optional(),
     refPages: z.number(),
     refEntries: z.number(),
     consolePushed: z.number(),

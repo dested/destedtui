@@ -2,6 +2,17 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-08 — bx profile prune: age threshold, never `default`, sized in a Worker
+Sal asked for per-profile disk use and pruning. Mine:
+- Bulk prune is by last use (the newest of Chrome's state files and the bx log) with a 1d/7d/30d seg, defaulting to 7d. It's disabled until every profile is measured, so the confirm shows the true count and size.
+- `default` is excluded from bulk prune, because it's the profile a person signs into by hand. It can still be deleted from its row.
+- In-use profiles are blocked in the UI, and the worker independently refuses any profile whose run file exists.
+- Sizing runs in a Bun Worker (about 800k files).
+**Rejected:**
+- Sizing on the UI thread. 25s of fs promises janks every frame.
+- A `bx prune` CLI verb in bx. The screen is where the sizes and in-use state already are, and a blind CLI prune is easier to fire by accident.
+- Deleting Chrome caches only (Cache/, GrShaderCache/), keeping the profile. Logins would survive, but most profiles are one-off agent names that never come back.
+
 ## 2026-10-08 — bx monitor: a destedtui screen over the daemon's own /debug, judged on private commit
 Sal's call: the TUI goes here, and the endpoint goes in bx. Mine: the screen merges two sources. One is bx's `GET /debug`, for what only the daemon knows (journal, drivers, per-tab CDP metrics, internal sizes). The other is the `lib/ports.ts` process scan, for the whole node → Chrome tree, which /debug can't see. The leak number is private commit with a 5-min least-squares slope, not working set, and history stays in memory for 30 min, with an opt-in JSONL memlog.
 **Rejected:**

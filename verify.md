@@ -102,7 +102,8 @@ Touchpoints: `src/lib/bx.ts`, `src/screens/Bx.tsx`, bx `src/daemon/debug.ts`
 1. A test daemon: `cd G:\code\bx && MSYS_NO_PATHCONV=1 bun src/cli.ts --profile bxtop --headless open about:blank`. Never stop, kill or gc another session's daemon to test.
 2. Frames: `bun scripts/snap-claude.tsx --route bx --size 200x48 --keys "wait2500 click:bxtop snap 2 snap 3 snap 4 snap 5 snap"` and again at `100x30` (detail replaces the list; `enter` opens it). Expect `● bxtop idle`, a driver line naming this session, the `open about:blank` command in activity, and a log tail with no ANSI escapes.
 3. Actions on the test daemon only: `--keys "wait2500 click:bxtop g wait400 snap h wait1500 snap"` → `⟳ gc bxtop: heap …` and `⛁ …\.bx\heaps\bxtop-….heapsnapshot` (delete it afterwards); `x x` → `■ stopped bxtop` and `~/.bx/run/bxtop.json` is gone.
-4. Scanner leak guard: run `processTable()` ×1000 in a loop and sample `processTable().procs.get(process.pid).commit`. It must stay flat (within ±30 MB), where the TextDecoder leak grew +340 MB.
+4. Profiles: make a throwaway profile (`bx --profile 0-prune-test --headless open about:blank`, then `bx --profile 0-prune-test stop`; the `0-` sorts it first by name), then `--route bx --size 160x40 --keys "wait2500 click:⛁_profiles wait5000 wait5000 s s snap x snap x wait2000 snap click:✕_prune snap escape escape wait1500 snap"`. Expect the row armed, then `✓ deleted 1 profile, freed …` with the folder and its log gone from disk, then prune ARMED ONLY (`⚠ delete N profiles unused for 7d+ …`). `escape` disarms it. Never send a second prune press in a test. The bx screen's button should read `⛁ profiles <total>`.
+5. Scanner leak guard: run `processTable()` ×1000 in a loop and sample `processTable().procs.get(process.pid).commit`. It must stay flat (within ±30 MB), where the TextDecoder leak grew +340 MB.
 
 ### Core-logic smoke (no DB needed) [medium]
 Touchpoints: `src/lib/discovery.ts`, `pgurl.ts`, `zip.ts`

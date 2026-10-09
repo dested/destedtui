@@ -49,6 +49,21 @@ Every kill takes two presses: the first arms it and the status line names what d
 - **`⛁ heap snapshot` / `h`:** POST `/debug/heapsnapshot`, written to `~/.bx/heaps/<profile>-<ts>.heapsnapshot`. Load it in Chrome DevTools → Memory. It takes seconds and briefly doubles the heap.
 - **`⏺ memlog` / `l`:** appends one JSON line per daemon per scan to `~/.destedtui/bx-memlog/<date>.jsonl`. Use it for overnight trend capture.
 - **`mem` seg / `m`:** commit (private bytes, the leak metric) or working set (what Task Manager shows).
+- **`⛁ profiles` / `p`:** opens the profiles screen (below). Once it has measured every profile, the button carries the total, e.g. `⛁ profiles 40G`.
+
+## Profiles screen
+
+`~/.bx/profiles` holds one Chrome user-data-dir per profile name, and bx never deletes them: 460 folders, 40 GB on 2026-10-08. This screen (`BxProfiles.tsx`) is where they get cleaned up.
+
+- **Sizing:** a Bun Worker (`lib/bxProfilesWorker.ts`) walks every folder, about 25s for all of them. Rows fill in as each one is measured. The sizes stay cached for the session, so coming back paints at once while a fresh scan runs.
+- **Rows:** `○` (or teal `●` when in use), name, size (dim under 100M, then fg, yellow from 500M, red from 1G), last used and status, plus a `✕ delete` row button. In-use rows show `in use` instead.
+- **Last used:** the newest mtime of Chrome's `Local State`, `Default/Preferences`, the folder itself and `~/.bx/logs/<name>.log`. It's orange when older than the `unused ≥` setting.
+- **In use:** a live daemon, an orphaned Chrome, an orphaned daemon, or a stale run file, from the same scan as the bx screen, every 3s. In-use profiles can't be deleted. The worker also refuses any profile whose run file exists.
+- **Detail strip:** the path and file count, the six biggest top-level entries, last used with the date, and the size of the bx log.
+- **`✕ delete` / `x` (two-press):** removes the folder and its bx log. Cookies, logins and cache go with it, and the next `bx --profile <name>` starts fresh.
+- **`✕ prune N · size` / `shift+x` (two-press):** deletes every profile unused for at least `1d`, `7d` (the default) or `30d`. It's only enabled once every profile has been measured. It never touches `default` (bx's own default, the one a person signs into) or anything in use.
+- A delete reports what it freed. If something still holds files in a folder, it's reported as partly deleted and that folder is measured again.
+- **Sort:** size (default), age (oldest first) or name. Keys: `s` cycles sort, `a` cycles the age, `r` rescans.
 
 ## Limits
 

@@ -24,6 +24,7 @@ import {
   type Series,
   type TreeProc,
 } from "../lib/bx.ts";
+import { profilesTotal } from "../lib/bxProfiles.ts";
 
 // bx daemons (G:\code\bx): one item per daemon — what it's doing, who's
 // driving it, what it costs and whether that's growing — then whatever bx
@@ -67,6 +68,8 @@ interface Flash {
 
 interface Props {
   back: () => void;
+  /** opens the bx profiles screen (disk use + prune) */
+  profiles: () => void;
   /** start with the memlog on (`destedtui --bx --log`) */
   log?: boolean;
 }
@@ -76,7 +79,7 @@ function sameTarget(a: ArmTarget, b: ArmTarget): boolean {
   return a.kind === b.kind && a.id === b.id;
 }
 
-export function Bx({ back, log }: Props) {
+export function Bx({ back, profiles, log }: Props) {
   const sampler = useRef(new BxSampler());
   const [scan, setScan] = useState<BxScan | null>(null);
   const [logging, setLogging] = useState<string | null>(() => (log ? sampler.current.setLogging(true) : null));
@@ -287,6 +290,8 @@ export function Bx({ back, log }: Props) {
         return d ? snapshot(d) : undefined;
       case "l":
         return toggleLog();
+      case "p":
+        return profiles();
       case "m":
         return setMem((m) => (m === "commit" ? "ws" : "commit"));
       case "r":
@@ -303,9 +308,11 @@ export function Bx({ back, log }: Props) {
 
   const spin = SPINNER_FRAMES[frame % SPINNER_FRAMES.length] ?? "·";
   const orphansArmed = armed?.target.kind === "orphans";
+  const diskTotal = profilesTotal();
   const actions: BarItem[] = [
     seg("mem", ["commit", "ws"] as const, mem, setMem),
     btn(logging ? "⏺ memlog on" : "⏺ memlog", logging ? T.yellow : T.cyan, toggleLog),
+    btn(diskTotal ? `⛁ profiles ${fmtBytes(diskTotal.bytes)}` : "⛁ profiles", T.cyan, profiles),
   ];
   if (orphans.length > 0) {
     actions.push(btn(orphansArmed ? `✕? clean up ${orphans.length}` : `✕ orphans (${orphans.length})`, T.red, killAllOrphans));
@@ -623,7 +630,7 @@ function OrphanItem({
   );
 }
 
-function RowButton({ label, width, hot, onPress }: { label: string; width: number; hot: boolean; onPress: () => void }) {
+export function RowButton({ label, width, hot, onPress }: { label: string; width: number; hot: boolean; onPress: () => void }) {
   return (
     <box
       style={{ width, height: 1, flexShrink: 0, backgroundColor: hot ? T.red : T.surfaceAlt }}
@@ -684,8 +691,8 @@ function StatusLine({
 
 // ─── detail pane ──────────────────────────────────────────────────────────────
 
-type Seg = [text: string, color: string, bold?: boolean];
-interface Line {
+export type Seg = [text: string, color: string, bold?: boolean];
+export interface Line {
   segs: Seg[];
   bold?: boolean;
 }
@@ -700,7 +707,7 @@ function lineBuilder() {
   };
 }
 
-function LineView({ line, width }: { line: Line; width: number }) {
+export function LineView({ line, width }: { line: Line; width: number }) {
   let used = 0;
   const parts = line.segs.map(([text, color, bold], i) => {
     const last = i === line.segs.length - 1;
@@ -890,7 +897,12 @@ function overviewLines(d: Daemon, width: number, now: number): Line[] {
     .join(" · ");
   if (slowest) b.add(`${pad("", 15)}${slowest}`, T.dim);
   const i = dbg.internals;
-  b.segs([pad("action log", 15), T.dim], [`${fmtCount(i.actionLog)} entries · ${fmtCount(i.actionLogChars)} chars`, i.actionLog >= 10_000 ? T.yellow : T.fg], ["  never trimmed", T.dim]);
+  const capNote =
+    i.actionLogCap === undefined
+      ? "  never trimmed (daemon predates the cap)"
+      : `  keeps ${fmtCount(i.actionLogCap)}${i.actionLogDropped ? ` · ${fmtCount(i.actionLogDropped)} trimmed` : ""}`;
+  const logHeavy = i.actionLogCap === undefined ? i.actionLog >= 10_000 : i.actionLog > i.actionLogCap;
+  b.segs([pad("action log", 15), T.dim], [`${fmtCount(i.actionLog)} entries · ${fmtCount(i.actionLogChars)} chars`, logHeavy ? T.yellow : T.fg], [capNote, T.dim]);
   b.segs([pad("refs", 15), T.dim], [`${fmtCount(i.refEntries)} on ${i.refPages} page${i.refPages === 1 ? "" : "s"}`, T.fg]);
   b.segs([pad("rings", 15), T.dim], [`console ${fmtCount(i.consolePushed)} · net ${fmtCount(i.netPushed)} pushed`, T.fg], [`  (each keeps ${i.ringCap})`, T.dim]);
   b.segs([pad("gc", 15), T.dim], [dbg.node.gcExposed ? "exposed — ⟳ gc forces a full collection" : "not exposed (started without --expose-gc)", dbg.node.gcExposed ? T.dim : T.yellow]);
@@ -1043,7 +1055,7 @@ function orphanLines(o: Orphan, width: number): Line[] {
 
 type Scale = "tree" | "page";
 
-function fmtBytes(b: number): string {
+export function fmtBytes(b: number): string {
   if (!Number.isFinite(b) || b <= 0) return "0";
   const mb = b / 1024 ** 2;
   if (mb >= 1024) return `${(mb / 1024).toFixed(mb >= 10 * 1024 ? 0 : 2)}G`;
@@ -1099,7 +1111,7 @@ function fmtDur(ms: number): string {
   return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
 }
 
-function fmtAgo(epochMs: number, now: number): string {
+export function fmtAgo(epochMs: number, now: number): string {
   if (!epochMs || !Number.isFinite(epochMs)) return "";
   const s = Math.max(0, Math.floor((now - epochMs) / 1000));
   if (s < 60) return `${s}s`;
@@ -1110,7 +1122,7 @@ function fmtAgo(epochMs: number, now: number): string {
   return `${Math.floor(h / 24)}d`;
 }
 
-function fmtCount(n: number): string {
+export function fmtCount(n: number): string {
   return n.toLocaleString("en-US");
 }
 

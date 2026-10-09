@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-08 — bx profiles screen: disk use per profile + prune
+Asked: per-profile disk usage and pruning for `~/.bx/profiles` (460 folders, 40 GB). Done: the `⛁ profiles` button (`p`) on the bx screen opens BxProfiles. A Worker sizes every folder (~25s, rows stream in) and works out last used and in-use. The screen has a two-press per-row delete (folder + log) and a two-press bulk prune by `unused ≥ 1d/7d/30d`. Prune never touches `default` or anything in use, and the worker refuses a profile with a run file. The overview also shows bx's new action-log cap. Verified headless at 160×40 and 100×30. A throwaway profile was deleted through the UI; prune was armed and disarmed, never fired (it would free 20G: 246 profiles ≥7d). tsc green. Board #513.
+Touched: src/lib/{bxProfiles,bxProfilesWorker,bx}.ts, src/screens/{BxProfiles,Bx}.tsx, src/{App.tsx,routes.ts}, scripts/snap-claude.tsx, features/bx.md
+
 ## 2026-10-08 — bx daemons monitor (`--bx`, `bxtop`) + the scanner's commit leak
 Asked: a full OpenTUI view of every bx session (what it's doing, memory, usage, tasks) to hunt leaks; the TUI lives here, the endpoint in bx. Done: Bx screen + `lib/bx.ts` over bx's new `GET /debug`. It shows state, driver, node + Chrome memory with trend and growth, per-tab heap/DOM/listeners, the journal, the tree and the log, plus orphans, two-press stop/kill, gc, heap snapshot and a memlog. While checking it can run overnight, found the real cause of leak-plan suspect 1: `TextDecoder("utf-16le").decode()` leaks ~670 B/call in Bun, so the scanner leaked ~350 KB/scan (~0.6 GB/h per Ports/Procs/bx screen). Swapped to `Buffer`: now flat. Plan stays active, since one screen doesn't explain 5 GB/h. tsc green, frames at 5 sizes. Board #509.
 Touched: src/lib/{bx,ports,procs}.ts, src/screens/{Bx,MainMenu}.tsx, src/{App,index}.tsx, src/routes.ts, shell/destedtui.ps1, scripts/snap-claude.tsx, features/bx.md, plans/2026-10-07-memory-leak.md

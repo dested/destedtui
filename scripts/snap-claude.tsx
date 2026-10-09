@@ -24,7 +24,7 @@ const steps = (flag("keys") ?? "snap").split(/\s+/).filter(Boolean);
 
 const routeName = flag("route") ?? "claude";
 // rotate / rotate-dead always open in simulate mode: every step is a dry run.
-const route = routeName === "rotate" ? { name: "keys" as const, rotate: { simulate: true } } : routeName === "rotate-dead" ? { name: "keys" as const, rotate: { dead: true, simulate: true } } : routeName === "keys" ? { name: "keys" as const } : routeName === "ports" ? { name: "ports" as const } : routeName === "procs" ? { name: "procs" as const } : routeName === "bx" ? { name: "bx" as const } : routeName === "term" ? { name: "term" as const } : routeName === "menu" ? { name: "menu" as const } : { name: "claude" as const };
+const route = routeName === "rotate" ? { name: "keys" as const, rotate: { simulate: true } } : routeName === "rotate-dead" ? { name: "keys" as const, rotate: { dead: true, simulate: true } } : routeName === "keys" ? { name: "keys" as const } : routeName === "ports" ? { name: "ports" as const } : routeName === "procs" ? { name: "procs" as const } : routeName === "bx" ? { name: "bx" as const } : routeName === "bx-profiles" ? { name: "bxProfiles" as const } : routeName === "term" ? { name: "term" as const } : routeName === "menu" ? { name: "menu" as const } : { name: "claude" as const };
 const setup = await testRender(<App initialRoute={route} cwd={process.cwd()} />, { width: w ?? 170, height: h ?? 44 });
 const settle = async (ms = 120) => {
   for (let i = 0; i < 4; i++) {
