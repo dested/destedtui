@@ -194,6 +194,15 @@ interface Entry {
   exe: string;
 }
 
+// Never TextDecoder("utf-16le") here. Its decode() leaks native memory on
+// every call, shared decoder or fresh (~670 B per 520-byte name, Bun 1.3.10 on
+// Windows), and the scanner decodes every process's name every 2s: ~350 KB per
+// scan, ~0.6 GB/h per open screen, part of the 68 GB commit leak
+// (plans/2026-10-07-memory-leak.md). Buffer's utf16le path measured flat.
+function utf16(bytes: Uint8Array): string {
+  return Buffer.from(bytes.buffer, bytes.byteOffset, bytes.byteLength).toString("utf16le");
+}
+
 function snapshot(w: Win32): Map<number, Entry> {
   const out = new Map<number, Entry>();
   const snap = w.k.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
@@ -205,7 +214,7 @@ function snapshot(w: Win32): Map<number, Entry> {
     let ok = w.k.Process32FirstW(snap, ptr(entry));
     while (ok) {
       const nameBytes = entry.subarray(44, 44 + 520);
-      const name = new TextDecoder("utf-16le").decode(nameBytes);
+      const name = utf16(nameBytes);
       const nul = name.indexOf("\0");
       const pid = dv.getUint32(8, true);
       out.set(pid, { pid, ppid: dv.getUint32(32, true), exe: nul >= 0 ? name.slice(0, nul) : name });
@@ -229,7 +238,7 @@ function readUnicodeString(w: Win32, h: Pointer, header: DataView, offset: numbe
   const len = header.getUint16(offset, true);
   const bufAddr = header.getBigUint64(offset + 8, true);
   const bytes = readRemote(w, h, bufAddr, len);
-  return bytes ? new TextDecoder("utf-16le").decode(bytes) : "";
+  return bytes ? utf16(bytes) : "";
 }
 
 const detailCache = new Map<string, { cmdline: string; cwd: string; startedAt: number }>();
