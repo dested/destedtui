@@ -215,6 +215,21 @@ function sessionMeta(): MetaCache {
   return metaCache;
 }
 
+/** A Claude session's tab name and status card, by session id — for screens that only know the id (bx). */
+export function sessionById(sessionId: string): { name: string | null; cwd: string | null; label: string | null; now: string | null } | null {
+  const meta = sessionMeta();
+  const card = meta.cards.get(sessionId);
+  let file: z.infer<typeof SessionFile> | undefined;
+  for (const s of meta.byPid.values()) {
+    if (s.sessionId === sessionId) {
+      file = s;
+      break;
+    }
+  }
+  if (!card && !file) return null;
+  return { name: file?.name ?? null, cwd: file?.cwd ?? null, label: card?.label ?? null, now: card?.now ?? null };
+}
+
 // ─── cpu sampling ─────────────────────────────────────────────────────────────
 
 interface Sample {
@@ -491,7 +506,7 @@ function pickRep(tree: ProcInfo[], ports: Map<number, number[]>, cpuOf: (p: Proc
   const busiest = [...pool].sort((a, b) => cpuOf(b) - cpuOf(a))[0];
   if (busiest && cpuOf(busiest) > 0.02) return busiest;
   // Otherwise the first real thing a shell ran: `bash -c "bun server.ts"` → bun.
-  return pool[0] ?? tree[0] ?? { pid: 0, ppid: 0, exe: "?", cmdline: "", cwd: "", startedAt: 0, memory: 0, cpuMs: 0 };
+  return pool[0] ?? tree[0] ?? { pid: 0, ppid: 0, exe: "?", cmdline: "", cwd: "", startedAt: 0, memory: 0, commit: 0, cpuMs: 0 };
 }
 
 // ─── actions ──────────────────────────────────────────────────────────────────

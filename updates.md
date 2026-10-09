@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-08 — bx daemons monitor (`--bx`, `bxtop`) + the scanner's commit leak
+Asked: a full OpenTUI view of every bx session (what it's doing, memory, usage, tasks) to hunt leaks; the TUI lives here, the endpoint in bx. Done: Bx screen + `lib/bx.ts` over bx's new `GET /debug`. It shows state, driver, node + Chrome memory with trend and growth, per-tab heap/DOM/listeners, the journal, the tree and the log, plus orphans, two-press stop/kill, gc, heap snapshot and a memlog. While checking it can run overnight, found the real cause of leak-plan suspect 1: `TextDecoder("utf-16le").decode()` leaks ~670 B/call in Bun, so the scanner leaked ~350 KB/scan (~0.6 GB/h per Ports/Procs/bx screen). Swapped to `Buffer`: now flat. Plan stays active, since one screen doesn't explain 5 GB/h. tsc green, frames at 5 sizes. Board #509.
+Touched: src/lib/{bx,ports,procs}.ts, src/screens/{Bx,MainMenu}.tsx, src/{App,index}.tsx, src/routes.ts, shell/destedtui.ps1, scripts/snap-claude.tsx, features/bx.md, plans/2026-10-07-memory-leak.md
+
 ## 2026-10-06 — keys: show + copy values
 Asked: stop hiding key values from Sal on his own machine; show it and copy it. Done: ⧉ row button (`c`) on the Keys screen copies the value and shows it in the status line; `keys reveal <id>` no longer needs `--yes-print-secret` and also copies; new `keys copy <id>`. Inside Claude Code reveal copies but doesn't print. tsc green; row layout checked headless.
 Touched: src/screens/Keys.tsx, src/keys.tsx, cliffnotes.md, features/keys.md

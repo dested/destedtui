@@ -31,6 +31,8 @@ export interface ProcInfo {
   startedAt: number;
   /** working set bytes, 0 when unreadable */
   memory: number;
+  /** private commit bytes (PagefileUsage), 0 when unreadable — what a leak grows, even once trimmed out of the working set */
+  commit: number;
   /** kernel + user CPU time so far, ms (0 when unreadable) — diff two scans for a rate */
   cpuMs: number;
 }
@@ -244,7 +246,7 @@ function readUnicodeString(w: Win32, h: Pointer, header: DataView, offset: numbe
 const detailCache = new Map<string, { cmdline: string; cwd: string; startedAt: number }>();
 
 function inspect(w: Win32, e: Entry): ProcInfo {
-  const info: ProcInfo = { pid: e.pid, ppid: e.ppid, exe: e.exe, cmdline: "", cwd: "", startedAt: 0, memory: 0, cpuMs: 0 };
+  const info: ProcInfo = { pid: e.pid, ppid: e.ppid, exe: e.exe, cmdline: "", cwd: "", startedAt: 0, memory: 0, commit: 0, cpuMs: 0 };
   const h =
     w.k.OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, 0, e.pid) ??
     w.k.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, 0, e.pid);
@@ -257,11 +259,13 @@ function inspect(w: Win32, e: Entry): ProcInfo {
       info.cpuMs = Number(((times[2] ?? 0n) + (times[3] ?? 0n)) / 10000n);
     }
 
-    // PROCESS_MEMORY_COUNTERS: WorkingSetSize (SIZE_T) at offset 16, struct is 72 bytes.
+    // PROCESS_MEMORY_COUNTERS (72 bytes): WorkingSetSize (SIZE_T) at 16, PagefileUsage at 56.
     const mem = new Uint8Array(72);
     new DataView(mem.buffer).setUint32(0, 72, true);
     if (w.k.K32GetProcessMemoryInfo(h, ptr(mem), 72)) {
-      info.memory = Number(new DataView(mem.buffer).getBigUint64(16, true));
+      const mv = new DataView(mem.buffer);
+      info.memory = Number(mv.getBigUint64(16, true));
+      info.commit = Number(mv.getBigUint64(56, true));
     }
 
     // cmdline/cwd never change after start (well, cwd can — but dev servers

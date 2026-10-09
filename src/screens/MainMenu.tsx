@@ -71,6 +71,14 @@ export function MainMenu({ discovery, go, quit }: Props) {
       badgeColor: T.cyan,
     },
     {
+      id: "bx",
+      icon: "◈",
+      title: "bx daemons",
+      subtitle: "every bx browser daemon — what it's doing, who drives it, memory growth, orphans",
+      badge: "live",
+      badgeColor: T.teal,
+    },
+    {
       id: "keys",
       icon: "◆",
       title: "Keys",
@@ -161,6 +169,7 @@ export function MainMenu({ discovery, go, quit }: Props) {
             else if (item.id === "term") go({ name: "term" });
             else if (item.id === "ports") go({ name: "ports" });
             else if (item.id === "procs") go({ name: "procs" });
+            else if (item.id === "bx") go({ name: "bx" });
             else if (item.id === "keys") go({ name: "keys" });
             else if (item.id === "claude") go({ name: "claude" });
             else if (item.id === "scripts") go({ name: "scripts" });

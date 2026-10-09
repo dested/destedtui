@@ -8,6 +8,7 @@
 #   term           jump straight into the terminal multiplexer, here
 #   ports          every node/bun server listening on localhost — open, cd, kill
 #   procs          what every claude session spun up — cpu, orphans, kill
+#   bxtop          every bx browser daemon — activity, memory growth, orphans
 #   auto-launch    the picker opens by itself when a new shell starts in the
 #                  projects root (that's Windows Terminal's startingDirectory)
 #
@@ -85,6 +86,17 @@ function ports {
 # with live CPU, and kills them. "cd there" uses the same handoff.
 function procs {
     Invoke-DestedTuiCd '--procs'
+}
+
+# `bxtop` watches every bx browser daemon (G:\code\bx): what each is doing,
+# who's driving it, memory growth per daemon and per page, orphans. No cd
+# handoff — it's a monitor. `bxtop --log` starts with the memlog on.
+function bxtop {
+    if (-not (Get-Command destedtui -ErrorAction SilentlyContinue)) {
+        Write-Warning "destedtui is not on PATH - run 'bun link' in G:\code\destedtui"
+        return
+    }
+    destedtui --bx @args
 }
 
 function Test-DestedTuiAutostart {

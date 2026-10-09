@@ -2,6 +2,14 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-08 — bx monitor: a destedtui screen over the daemon's own /debug, judged on private commit
+Sal's call: the TUI goes here, and the endpoint goes in bx. Mine: the screen merges two sources. One is bx's `GET /debug`, for what only the daemon knows (journal, drivers, per-tab CDP metrics, internal sizes). The other is the `lib/ports.ts` process scan, for the whole node → Chrome tree, which /debug can't see. The leak number is private commit with a 5-min least-squares slope, not working set, and history stays in memory for 30 min, with an opt-in JSONL memlog.
+**Rejected:**
+- A `bx top` verb in bx. bx stays the automation tool, and the tree scanner and session labels already live here.
+- Working set as the default metric. It hid the 68 GB incident behind a 2.8 GB working set.
+- Talking CDP to each Chrome from the TUI. Playwright drives Chrome over a pipe, so there's no debugging port to reach. /debug proxies the metrics, with an 800ms timeout per tab.
+- Persisting history by default. The memlog is one toggle away.
+
 ## 2026-10-04 — Claude usage: native transcript parser, API-equivalent dollars, priced at view time
 Sal's calls: build it natively (no repo of his existed — only the `cc` → `bunx ccusage` shortcut), label dollars API-equiv, roll sessions up to the top-level g:\code folder, all four views. Mine:
 - **Own parser over shelling out to ccusage.** ccusage re-reads all ~18 GB each run (~1 min) and groups by exact cwd; an incremental cache by byte offset makes reopening instant and lets project, active time and timeline be ours.

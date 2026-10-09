@@ -97,6 +97,13 @@ Touchpoints: `src/lib/claude/`, `src/screens/ClaudeUsage.tsx`
 5. Buttons, with real mouse clicks (`click:<label>`, `_` = space): `--size 120x34 --keys "click:2_timeline click:weeks snap click:◀ snap click:≡_sessions snap click:✕_clear click:1_projects click:recent snap click:←_back snap"` → weekly grid, cursor moves a week, sessions scoped to that week, filter clears, sort flips to recent, back lands on the menu.
 6. Other screens' buttons: `--route ports|keys|rotate|rotate-dead|term` (the rotate routes open in simulate). E.g. `--route rotate --keys "wait500 click:<fp> click:^▶_start click:^⚠_confirm wait1500 snap"`. Never click `✓ go` / `⧉ read clipboard` / `✕` revoke on the real `keys` route.
 
+### bx daemons [cheap → spawns one headless daemon]
+Touchpoints: `src/lib/bx.ts`, `src/screens/Bx.tsx`, bx `src/daemon/debug.ts`
+1. A test daemon: `cd G:\code\bx && MSYS_NO_PATHCONV=1 bun src/cli.ts --profile bxtop --headless open about:blank`. Never stop, kill or gc another session's daemon to test.
+2. Frames: `bun scripts/snap-claude.tsx --route bx --size 200x48 --keys "wait2500 click:bxtop snap 2 snap 3 snap 4 snap 5 snap"` and again at `100x30` (detail replaces the list; `enter` opens it). Expect `● bxtop idle`, a driver line naming this session, the `open about:blank` command in activity, and a log tail with no ANSI escapes.
+3. Actions on the test daemon only: `--keys "wait2500 click:bxtop g wait400 snap h wait1500 snap"` → `⟳ gc bxtop: heap …` and `⛁ …\.bx\heaps\bxtop-….heapsnapshot` (delete it afterwards); `x x` → `■ stopped bxtop` and `~/.bx/run/bxtop.json` is gone.
+4. Scanner leak guard: run `processTable()` ×1000 in a loop and sample `processTable().procs.get(process.pid).commit`. It must stay flat (within ±30 MB), where the TextDecoder leak grew +340 MB.
+
 ### Core-logic smoke (no DB needed) [medium]
 Touchpoints: `src/lib/discovery.ts`, `pgurl.ts`, `zip.ts`
 Write a scratch script (outside the repo) that builds a fake monorepo + `.env`, then asserts: `discover()` finds packages/dbs, `parsePgUrl` decodes an encoded password, and `createBackupZip` → `readZipMetadata` → `extractZipEntry` round-trips a few MB byte-identically.

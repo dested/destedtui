@@ -1,7 +1,7 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-10-04.
+> Last updated: 2026-10-08.
 
 ## What this is
 
@@ -13,13 +13,14 @@ Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that li
 - **Entry point:** `src/index.tsx` → arg parsing → `createCliRenderer` → `<App/>`
 - **Type-check:** `bun x tsc --noEmit`
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
-- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys`, `--claude` (jump straight to a screen), `--usage` (print Claude usage, `--days`/`--project`/`--json`), `--install-shell`, `--help`, `--version`
+- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--procs`, `--bx` (+ `--log`), `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys`, `--claude` (jump straight to a screen), `--usage` (print Claude usage, `--days`/`--project`/`--json`), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
 - **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set`/`usage`/`push`/`drydock`/`rotate --dry-run` for Claude sessions (the `keys` skill, source `skill/keys/`). `reveal`/`copy` for a value (never printed inside Claude Code); values never on argv. Exit 0 ok / 1 user error / 2 provider API error
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
 - **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff)
 - **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. Windows-only. `--ports --json` prints one scan with page titles as versioned JSON (`lib/ports-json.ts`), read by sal-agent's https://sal.localhost/ports; add fields, never rename them
 - **Claude procs (`procs`, `--procs`):** what every Claude Code session spun up — one group per CLI `claude.exe` (its tool shells, servers, watchers), orphan groups per project (parent gone), dev work outside Claude. Live CPU (% of one core, smoothed), memory, ports, flags (hot, ×N dupes, daemon, mcp, bg = nohup'd from that session's scratchpad); two-press kill per unit, per group, or every orphan leftover (no port, not a daemon). `lib/procs.ts` on top of `processTable()` in `lib/ports.ts`. See [features/procs.md](features/procs.md)
+- **bx daemons (`bxtop`, `--bx`, `--bx --log`):** every bx browser daemon (G:\code\bx): state (in flight / recording / idle / old), who drives it (status-card label via the `x-bx-client` header), node + Chrome memory with trend and growth/min, per-tab heap/DOM/listeners, command journal, process tree, log tail; orphan daemons/Chromes/run files; two-press stop/kill, gc, heap snapshot, memlog to `~/.destedtui/bx-memlog/`. Reads each daemon's `GET /debug`. See [features/bx.md](features/bx.md)
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
 - **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock` + `usage.json` (usage cache, no secrets, 15-min freshness) + `drydock.json` (Drydock apps → folders, env as var → fingerprint, 15-min freshness); `KEYS_VAULT_DIR` overrides the folder; `DRYDOCK_URL` overrides the portal (`http://localhost:4400/trpc`)
@@ -49,7 +50,7 @@ prompts/
 ptyhost/
   host.mjs              Node sidecar: owns @lydell/node-pty, JSON-over-stdio, multiplexes every pane's PTY
 shell/
-  destedtui.ps1         `proj`/`pj` + `ports` (shared `Invoke-DestedTuiCd` temp-file cd handoff) + autostart guard + `dested` alias + `term` fn
+  destedtui.ps1         `proj`/`pj` + `ports` (shared `Invoke-DestedTuiCd` temp-file cd handoff) + autostart guard + `dested` alias + `term` / `procs` / `bxtop` fns
   install.ps1           idempotent marked block into the real $PROFILE (-Uninstall removes it)
 src/
   index.tsx             CLI entry: --help/--version/--projects/--backup/--restore/--local/--pull/--review/--install-shell
@@ -74,6 +75,7 @@ src/
     MainMenu.tsx        utility tiles incl. disabled "coming soon" rows
     Startup.tsx         dev-fleet dashboard: rail of app cards (dot/spinner/buttons) + live console pane
     Procs.tsx           claude procs: grouped tree (session → units) with cpu/mem/up + ✕ row buttons, detail pane (flags explained, process tree); ✕ all per group, ✕ orphan leftovers in the bar
+    Bx.tsx              bx daemons: 2-line daemon/orphan rows (state, memory, trend, growth, driver, ■ stop / ✕ row buttons) + detail pane with 5 views (overview/pages/activity/procs/log) and gc / heap snapshot / kill tree
     Ports.tsx           localhost servers: live table (port/project/command/rt/up/mem + ↗ ✕ row buttons) + detail pane (title, links, cwd, kill chain); two-press kill, / filter, g = cd there
     Term.tsx            terminal multiplexer: rail of session CARDS (rename ✎, close ✕, live age) + active PTY pane with a note strip above it, nav/input modes, ctrl+b leader. No auto-spawn — starts empty.
     Projects.tsx        g:\code card grid: own type-ahead, hover, wheel, click/enter = cd + quit
@@ -92,6 +94,7 @@ src/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all)
     ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd (+ CPU time); kill-root chain walk, HTTP <title> probe, killServer; processTable() = every process for procs
     procs.ts            claude procs: ProcSampler (cpu rates between scans), session metadata (~/.claude/sessions, ~/.sal/status cards), units/groups/flags, killRoots (one batched taskkill), leftoverUnits
+    bx.ts               bx monitor data: run files + /debug (zod mirror of bx's protocol), BxSampler (tree per daemon, orphans, 30-min Series history, slope, memlog), driversOf, stop/kill/gc/heapSnapshot, log tail
     proctext.ts         prettyCommand / projectOf / leaf / exeName, shared by ports + procs
     term.ts             terminal multiplexer brain: `term` singleton — sessions, xterm emulators, active/mode, create/close, per-session notes (persist by title)
     ptyhost.ts          Bun-side client for the Node pty sidecar: spawns it, frames JSON, tree-kills it on exit
@@ -167,6 +170,10 @@ src/
 | What `x` kills on the localhost screen | `findKillRoot` + `isLauncher` in `lib/ports.ts` — climbs node/bun/`cmd /c` parents, never into this tui's ancestry, a shell, or a claude process |
 | Reading another process's cwd / command line | `inspect` in `lib/ports.ts` (PEB offsets, x64) |
 | Which session a process belongs to / why it's an orphan | `classify` in `lib/procs.ts`: nearest CLI claude ancestor, else climb launch wrappers to a root; dead parent = orphan; scratchpad path traces it back to its session |
+| The bx daemons monitor | `src/screens/Bx.tsx` (UI) + `src/lib/bx.ts` (data/actions) — spec in `features/bx.md`; the daemon side is bx's `src/daemon/debug.ts` |
+| A new field from bx's /debug | add it to bx `protocol.ts` (additive only), then `DebugSchema` in `lib/bx.ts` (zod strips unknown keys, so nothing shows until you do) |
+| What counts as a bx orphan | `doScan` in `lib/bx.ts`: daemon proc with no run file, bx Chrome (`--user-data-dir` under `.bx\profiles`, no `--type`) whose daemon is gone, run file with a dead/reused pid |
+| Headless frames of the bx screen | `bun scripts/snap-claude.tsx --route bx --size 200x48 --keys "wait2500 snap 3 snap"` (`click:<profile>` selects a row) |
 | What the procs bulk kills skip | `killableUnits` (mcp, daemon, service) + `leftoverUnits` (also anything listening) in `lib/procs.ts` |
 | A built-in picker action (type "startup") | `ACTIONS` + `matchAction` in `src/screens/Projects.tsx`, card in `components/ActionCard.tsx` |
 | Open a URL in Chrome | `src/lib/run.ts` → `openInChrome` |
@@ -246,6 +253,9 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - The review verdict is **computed by the CLI** (any blocker ⇒ blocked) — never trusted from the model. The reviewer proc is registered via `trackProcess` so quit/ctrl+c tree-kills it like every other child.
 - **Review output is judged against a raw Claude session** on the same diff (features/review.md "Quality bar"): coverage + merge/deploy notes matter as much as peak findings, and the TUI must never truncate model output. Re-benchmark after material prompt changes.
 - **Driving the TUI from Git Bash + tmux: `export MSYS_NO_PATHCONV=1` first.** MSYS rewrites a bare `/` argument to `C:/Program Files/Git/`, so `tmux send-keys '/'` types those letters into the app (on the localhost screen `o` opened Chrome and `g` cd'd away). Never send keys to a TUI session you can't see — tear down with `tmux kill-session`; two queued `Escape`s can coalesce and leave the app reading your next shell line as hotkeys.
+- **Never `TextDecoder("utf-16le")` on a polling path.** In Bun 1.3.10 on Windows its `decode()` leaks ~670 B of native commit per call (shared or fresh decoder alike; the JS heap stays flat). The process scanner decoded every process name every 2s, so ~350 KB/scan and ~0.6 GB/h per open Ports/Procs/bx screen. `utf16()` in `lib/ports.ts` goes through `Buffer.toString("utf16le")`, measured flat. See plans/2026-10-07-memory-leak.md.
+- **bx's /debug is a contract with this repo.** `lib/bx.ts` mirrors it with zod; bx keeps it additive. A daemon that 404s /debug is an "old daemon" (predates 2026-10-08) and only shows process-scan numbers.
+- **The leak metric is private commit, not working set.** A leaking process gets trimmed to the pagefile, so its working set looks fine while commit climbs (the 68 GB incident had a 2.8 GB working set). The bx screen defaults to commit; `m` flips to working set.
 - **The localhost scanner's PEB offsets are x64** (`ProcessParameters` @0x20, `CurrentDirectory` @0x38, `CommandLine` @0x70). A 32-bit target would need the WOW64 PEB; node/bun are 64-bit, and a failed read just leaves cwd empty (row shows `·`). Processes owned by SYSTEM/other users can't be opened — same empty result, by design.
 - **HTTP probes mark a port `http` the moment headers arrive** and read `<title>` best-effort from the first chunks — an SSR stream may never end, and timing out the body used to misreport live servers as "not http". Self-signed TLS (portless :443) is accepted.
 - **Values show only on request.** Lists, `--json`, errors: fingerprints only. The screen's ⧉ row button (`c`) copies a value and shows it in the status line; `keys reveal <id>` prints + copies, `keys copy <id>` copies. Inside Claude Code (`CLAUDECODE` set) reveal copies but never prints, and `values` still needs `--yes-print-secret` and refuses there. Keys enter via clipboard (`--clipboard`, cleared after) or `--stdin`, never argv. Provider error bodies are echoed only for non-2xx (a 2xx body may hold the key).
@@ -267,5 +277,6 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Done** Localhost (`ports`) — every node/bun listener with URL, page title, cwd, command, uptime, memory; `x` kills the whole dev-command chain (two-press; names exactly what dies + other ports in the same tree), `shift+x` just the listener; `a` shows every TCP listener. Menu tile + `--ports` + `ports` shell fn + typing "ports" in the picker. Verified in tmux: 200×46 and 100×30 renders, filter, keyboard + mouse kill of a throwaway `bun run dev` chain, `g` cd handoff.
 - **Done** [Keys](features/keys.md) — `keys` bin + screen + skill + PowerShell `Use-Keys`. OpenAI mint → 200 → revoke → 401 verified live; `keys import` run for real (98 keys, 65 projects, 20 shared values). xAI/OpenRouter/fal/ElevenLabs adapters built from docs but not exercised (no admin credentials).
 - **Done** [Claude usage](features/claude-usage.md) — per-project cost/tokens/sessions/active time, project × day heatmap, sessions with resume, day log; `--claude`, `--usage`, menu tile, "claude" in picker. Pricing checked against Claude Code's own `cost-state` (single-model sessions match to the cent). Frames verified headless at 180×46/120×30/100×30.
+- **Done** [bx daemons](features/bx.md) — live monitor of every bx daemon over its `/debug` endpoint; `--bx`, `bxtop`, menu tile. Frames verified headless at 200×48/200×40/200×30/140×24/100×30; stop, orphan kill, gc and heap snapshot exercised against live daemons.
 - **Not built** (menu shows "coming soon"): Git dashboard, .env inspector, node_modules nuker
 - **Next:** whichever coming-soon tile the user picks
