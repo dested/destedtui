@@ -4,9 +4,9 @@
   "description": "Personal dev-project TUI: run package scripts, backup/restore Postgres, and more",
   "type": "module",
   "bin": {
-    "destedtui": "./src/index.tsx",
-    "review": "./src/review.tsx",
-    "keys": "./src/keys.tsx"
+    "destedtui": "./bin/destedtui.mjs",
+    "review": "./bin/review.mjs",
+    "keys": "./bin/keys.mjs"
   },
   "scripts": {
     "dev": "bun run src/index.tsx",

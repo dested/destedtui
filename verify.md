@@ -16,6 +16,14 @@
 
 No unit-test runner. Core-logic smoke and full e2e are ad-hoc scripts (patterns below).
 
+### Idle pause [cheap]
+Touchpoints: `bin/launch.mjs`, `bin/paused.mjs`, `src/lib/idle.ts`, the pause effect in `src/App.tsx`
+In tmux, in pwsh, with `$env:DESTEDTUI_IDLE_MS=4000`:
+1. `destedtui --procs`, wait ~6s → the paused panel names "claude procs" and how much it gave back. Only two `node.exe` processes remain for it (~17 MB each), and no `bun.exe`.
+2. A click (`ESC=$(printf '\033'); tmux send-keys -l "${ESC}[<0;5;5M"`) or any key → back on procs. Wait again, then `q` → prompt, `$LASTEXITCODE` 0, no leftover bun/node.
+3. `destedtui --projects` → after ~4s it prints "destedtui closed after a minute idle" and exits 0.
+4. `destedtui --review`, and `--term` + `n` (one pane): neither pauses.
+
 ## Test accounts / data
 
 Postgres credentials come from whatever project `.env` you point it at — never stored in this repo. For e2e, local dev DBs exist in `G:\code\changehowilook\.env` and `G:\code\beep-demo\web\.env` (localhost:5432; server is PostgreSQL 18.x as of 2026-07).

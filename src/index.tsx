@@ -1,8 +1,5 @@
 #!/usr/bin/env bun
 import { join } from "node:path";
-import { createCliRenderer } from "@opentui/core";
-import { createRoot } from "@opentui/react";
-import { App } from "./App.tsx";
 import type { Route } from "./routes.ts";
 
 const args = process.argv.slice(2);
@@ -87,9 +84,5 @@ else if (args.includes("--pull")) initialRoute = { name: "pull" };
 else if (args.includes("--review")) initialRoute = { name: "review" };
 else if (args.includes("--claude")) initialRoute = { name: "claude" };
 
-const renderer = await createCliRenderer({
-  exitOnCtrlC: false,
-  targetFps: 30,
-});
-
-createRoot(renderer).render(<App initialRoute={initialRoute} cwd={process.cwd()} />);
+const { bootTui } = await import("./tui.tsx");
+await bootTui(initialRoute);

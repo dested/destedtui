@@ -3,9 +3,6 @@
 // Values reach stdout only through `reveal` and `values --yes-print-secret`;
 // neither prints inside Claude Code (reveal still copies to the clipboard there).
 
-import { createCliRenderer } from "@opentui/core";
-import { createRoot } from "@opentui/react";
-import { App } from "./App.tsx";
 import { clearClipboard, readClipboard, writeClipboard } from "./lib/keys/win32.ts";
 import { UserError } from "./lib/keys/errors.ts";
 import { findKey, readVault, reuseGroups, VAULT_PATH, type ReuseGroup } from "./lib/keys/vault.ts";
@@ -698,8 +695,8 @@ if (code === -1) {
     out(HELP);
     process.exit(0);
   }
-  const renderer = await createCliRenderer({ exitOnCtrlC: false, targetFps: 30 });
-  createRoot(renderer).render(<App initialRoute={{ name: "keys", rotate: tuiRoute }} cwd={process.cwd()} />);
+  const { bootTui } = await import("./tui.tsx");
+  await bootTui({ name: "keys", rotate: tuiRoute });
 } else {
   process.exit(code);
 }

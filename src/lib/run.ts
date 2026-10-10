@@ -36,6 +36,11 @@ export function killAll(): void {
 
 process.on("exit", killAll);
 
+/** How many children are alive right now — any of them holds the TUI awake (lib/idle.ts). */
+export function runningCount(): number {
+  return running.size;
+}
+
 /** Track an externally spawned process so killAll() reaps it on quit. */
 export function trackProcess(handle: ProcHandle): () => void {
   running.add(handle);

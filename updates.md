@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-10 — idle pause: a minute idle → exit, paused screen, click to resume
+Asked: old destedtui windows hog memory; live ~1 min, then pause, clear, click to resume. Done: the bins are now Node launchers (`bin/`). After 60s idle the Bun TUI saves its route stack and exits 75. `paused.mjs` shows where it was and what it gave back (~600 MB for Procs), and a click or key respawns it on the same screen. The shell picker just exits instead. Nothing pauses while busy. ~35 MB while paused. Re-ran `bun link`. tsc green, tmux round trips verified. Board #516.
+Touched: bin/*, src/{tui,App,index,keys,review}.tsx, src/lib/{idle,pause,run}.ts, package.json, tsconfig.json, plans/2026-10-07-memory-leak.md
+
 ## 2026-10-08 — bx profiles screen: disk use per profile + prune
 Asked: per-profile disk usage and pruning for `~/.bx/profiles` (460 folders, 40 GB). Done: the `⛁ profiles` button (`p`) on the bx screen opens BxProfiles. A Worker sizes every folder (~25s, rows stream in) and works out last used and in-use. The screen has a two-press per-row delete (folder + log) and a two-press bulk prune by `unused ≥ 1d/7d/30d`. Prune never touches `default` or anything in use, and the worker refuses a profile with a run file. The overview also shows bx's new action-log cap. Verified headless at 160×40 and 100×30. A throwaway profile was deleted through the UI; prune was armed and disarmed, never fired (it would free 20G: 246 profiles ≥7d). tsc green. Board #513.
 Touched: src/lib/{bxProfiles,bxProfilesWorker,bx}.ts, src/screens/{BxProfiles,Bx}.tsx, src/{App.tsx,routes.ts}, scripts/snap-claude.tsx, features/bx.md

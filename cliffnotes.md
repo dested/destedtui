@@ -1,7 +1,7 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-10-08.
+> Last updated: 2026-10-10.
 
 ## What this is
 
@@ -10,7 +10,8 @@ Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that li
 ## Quick Reference
 
 - **Run:** `bun run dev` in this repo, or `destedtui` anywhere (globally linked via `bun link`)
-- **Entry point:** `src/index.tsx` → arg parsing → `createCliRenderer` → `<App/>`
+- **Entry point:** global bin `bin/destedtui.mjs` (Node launcher) → `bun src/index.tsx` → arg parsing → `bootTui` (`src/tui.tsx`) → `<App/>`. `bun run dev` skips the launcher (no idle pause)
+- **Idle pause:** every bin's TUI (`destedtui`, `keys`, `review`) runs as a child of `bin/launch.mjs`. After 60s with no input and nothing live, the child saves its screen stack and exits, so all its memory goes back to Windows. `bin/paused.mjs` then shows "paused, click to resume", and a click starts a fresh child on the same screens. The shell-launched picker just exits to the prompt instead. `DESTEDTUI_IDLE_MS` overrides the timeout (0 = off)
 - **Type-check:** `bun x tsc --noEmit`
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
 - **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--procs`, `--bx` (+ `--log`), `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys`, `--claude` (jump straight to a screen), `--usage` (print Claude usage, `--days`/`--project`/`--json`), `--install-shell`, `--help`, `--version`
@@ -42,6 +43,10 @@ Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that li
 ## Directory structure
 
 ```
+bin/                    the global bins (package.json `bin`). Node, not Bun; re-run `bun link` after changing them
+  launch.mjs            the launcher: runs `bun src/<entry>` as a child and passes its exit code through; exit 75 = paused → paused.mjs → respawn with the resume file
+  paused.mjs            the paused screen in raw ANSI (palette mirrored from theme.ts): where it was, what it gave back, ▶ resume / ✕ quit
+  destedtui.mjs / keys.mjs / review.mjs   3-line `launch("src/<entry>.tsx")`
 skill/
   keys/SKILL.md         the `keys` Claude skill; junctioned into ~/.claude/skills/keys (sals-powershell-setup install.ps1 `$externalSkills`)
 prompts/
@@ -56,7 +61,8 @@ src/
   index.tsx             CLI entry: --help/--version/--projects/--backup/--restore/--local/--pull/--review/--install-shell
   review.tsx            the `review` bin: scope flags, --headless path, or boots the TUI on the review route
   keys.tsx              the `keys` bin: the vault CLI, or boots the TUI on the keys route
-  App.tsx               Route stack (push/pop), discovery kickoff, chooseProject (cd + exit), global ctrl+c quit
+  tui.tsx               bootTui: createCliRenderer + <App/>; reads the resume stack when the launcher resumes us
+  App.tsx               Route stack (push/pop), discovery kickoff, chooseProject (cd + exit), global ctrl+c quit, the idle pause (writes the resume file, exits 75)
   routes.ts             Route union type (backup/restore carry optional presets)
   theme.ts              T = Tokyo Night palette + SPINNER_FRAMES (single source of color truth)
   components/
@@ -98,6 +104,8 @@ src/
     bx.ts               bx monitor data: run files + /debug (zod mirror of bx's protocol), BxSampler (tree per daemon, orphans, 30-min Series history, slope, memlog), driversOf, stop/kill/gc/heapSnapshot, log tail
     bxProfiles.ts       bx profile folders: sizeProfile (walk + top-level breakdown + last used), deleteProfile (refuses a live run file; every rm goes through profileDir), the worker's zod message contract, the screen's cache + profilesTotal
     bxProfilesWorker.ts runs bxProfiles.ts scans and deletes in a Bun Worker, one request at a time
+    idle.ts             watchIdle (any stdin "data" = activity) + isBusy (busy routes, live run.ts children, open term panes)
+    pause.ts            the pause contract: PAUSED_EXIT=75, env names, zod resume file (resumable routes only), screen labels
     proctext.ts         prettyCommand / projectOf / leaf / exeName, shared by ports + procs
     term.ts             terminal multiplexer brain: `term` singleton — sessions, xterm emulators, active/mode, create/close, per-session notes (persist by title)
     ptyhost.ts          Bun-side client for the Node pty sidecar: spawns it, frames JSON, tree-kills it on exit
@@ -204,6 +212,8 @@ src/
 | Clone remote → localhost | `src/lib/pull.ts` + `src/screens/Pull.tsx` |
 | Restore a raw .sql (not custom) | `restore.ts` `dumpKind()` → `psql -f` (else `pg_restore`) |
 | Process spawning / killing | `src/lib/run.ts` |
+| Idle pause: the timeout, what holds it awake | `src/lib/idle.ts` (`busyRoute`, `isBusy`); the pause itself in `App.tsx`; launcher `bin/launch.mjs`; screen `bin/paused.mjs` |
+| Which screens survive a pause | `resumableRoute` in `src/lib/pause.ts`. A route with live payload must be busy instead |
 | Keybind hints | each screen's `<Footer hints=…>` |
 
 ## Architecture
@@ -270,6 +280,9 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - Windows clipboard history (Win+V) keeps its own copy of anything copied; `keys add --clipboard` clears the live clipboard only.
 - **tmux (psmux) misdraws diffed rows**: spaces opentui skips with a cursor move vanish in `capture-pane`, so padded columns look collapsed when they aren't. Judge alignment with the headless frame scripts (`scripts/snap-claude.tsx`, `scripts/snap-keys.tsx` — they read opentui's own buffer), not a tmux capture.
 - **Claude transcripts write one line per content block, each repeating the message's usage** — sum lines naively and you double-to-triple count. Dedupe on `message.id + requestId` (`lib/claude/scan.ts`). Tool inputs contain nested `"model":"opus"` objects; only `message.model` is the real model.
+- **Bun's floor on Windows is ~340 MB of private commit for an empty script; Node's is ~15 MB.** That's why the launcher and the paused screen (`bin/*.mjs`) are Node. Don't port them to Bun or import TS into them: a paused terminal must cost ~35 MB, not ~800.
+- **A bin's shebang is its runtime.** `bun link` writes the shebang's program into `~/.bun/bin/<bin>.bunx`. If you change a bin's path or shebang, re-run `bun link`, or the old shim keeps launching the old file.
+- **Anything a pause would destroy must hold the TUI awake.** Either add its route to `busyRoute` in `lib/idle.ts` or spawn it through `lib/run.ts` (live children count). Term panes and startup dev servers are already covered.
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 
 ## Status
@@ -282,5 +295,6 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Done** [Keys](features/keys.md) — `keys` bin + screen + skill + PowerShell `Use-Keys`. OpenAI mint → 200 → revoke → 401 verified live; `keys import` run for real (98 keys, 65 projects, 20 shared values). xAI/OpenRouter/fal/ElevenLabs adapters built from docs but not exercised (no admin credentials).
 - **Done** [Claude usage](features/claude-usage.md) — per-project cost/tokens/sessions/active time, project × day heatmap, sessions with resume, day log; `--claude`, `--usage`, menu tile, "claude" in picker. Pricing checked against Claude Code's own `cost-state` (single-model sessions match to the cent). Frames verified headless at 180×46/120×30/100×30.
 - **Done** [bx daemons](features/bx.md) — live monitor of every bx daemon over its `/debug` endpoint; `--bx`, `bxtop`, menu tile. Frames verified headless at 200×48/200×40/200×30/140×24/100×30; stop, orphan kill, gc and heap snapshot exercised against live daemons.
+- **Done** Idle pause (2026-10-10): launcher, paused screen and resume, ~35 MB while paused. Verified in tmux: pause → click resume → pause → `q` quits (exit 0, nothing left over); the picker exits quietly; review and an open term pane never pause.
 - **Not built** (menu shows "coming soon"): Git dashboard, .env inspector, node_modules nuker
 - **Next:** whichever coming-soon tile the user picks

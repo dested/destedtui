@@ -1,7 +1,4 @@
 #!/usr/bin/env bun
-import { createCliRenderer } from "@opentui/core";
-import { createRoot } from "@opentui/react";
-import { App } from "./App.tsx";
 import type { Route } from "./routes.ts";
 import { DEFAULT_EFFORT, DEFAULT_MODEL, resolveScopeFlags, type ReviewScope } from "./lib/review.ts";
 import { runHeadless } from "./lib/reviewHeadless.ts";
@@ -107,9 +104,5 @@ const initialRoute: Route = scoped
   ? { name: "review", scope: await resolve(), autoStart: true }
   : { name: "review" };
 
-const renderer = await createCliRenderer({
-  exitOnCtrlC: false,
-  targetFps: 30,
-});
-
-createRoot(renderer).render(<App initialRoute={initialRoute} cwd={process.cwd()} />);
+const { bootTui } = await import("./tui.tsx");
+await bootTui(initialRoute);

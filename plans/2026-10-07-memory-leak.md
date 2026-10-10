@@ -71,6 +71,13 @@ Status: active
   thread every 2 s. `NtQuerySystemInformation(SystemProcessInformation)` would get
   names, ppids, times and memory counters in one call.
 
+## 2026-10-10: the idle pause caps the damage
+
+The leak is still open, but a TUI now lives at most a minute idle: the bins
+are Node launchers that restart the Bun process (decisions.md 2026-10-10). A
+leak only grows while someone is actively using a screen, or while one is held
+awake (term panes, dev servers).
+
 ## Steps
 
 1. **Measure first.** Add a hidden `--memlog` flag that appends every 15 s to

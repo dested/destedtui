@@ -2,6 +2,14 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-10 — Idle pause restarts the process, from a Node launcher
+Sal asked for the TUI to live about a minute, then pause and release everything, with a click to resume. Sal picked: 60s with no input (not a hard cap); never pause while busy (term panes, dev servers, a running script/backup/review); the shell's picker just exits instead of showing a resume screen. Mine: the pause is a real process exit. The bins are Node launchers (`bin/launch.mjs`) that run the Bun TUI as a child and respawn it on the saved route stack.
+**Rejected:**
+- Unmounting in-process and forcing a GC. Most of the 5 GB/h leak is still unexplained native memory, and only an exit frees it.
+- A Bun launcher. Bun's empty-process floor on Windows is ~340 MB of private commit, so a launcher plus paused screen would park ~800 MB in every idle terminal. Node is ~15 MB each.
+- Reading stdin in the launcher for the paused screen. A parent with a pending console read can steal the child's keystrokes, so the paused screen is its own short-lived process.
+- Resuming in-screen state (filters, selection, a finished review). Only the route stack round-trips; screens whose state matters are busy instead.
+
 ## 2026-10-08 — bx profile prune: age threshold, never `default`, sized in a Worker
 Sal asked for per-profile disk use and pruning. Mine:
 - Bulk prune is by last use (the newest of Chrome's state files and the bx log) with a 1d/7d/30d seg, defaulting to 7d. It's disabled until every profile is measured, so the confirm shows the true count and size.

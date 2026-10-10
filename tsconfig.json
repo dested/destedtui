@@ -11,9 +11,11 @@
     "jsx": "react-jsx",
     "jsxImportSource": "@opentui/react",
     "strict": true,
+    "allowJs": true,
+    "checkJs": true,
     "skipLibCheck": true,
     "noUncheckedIndexedAccess": true,
     "types": ["bun-types"]
   },
-  "include": ["src"]
+  "include": ["src", "bin"]
 }

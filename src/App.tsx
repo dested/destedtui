@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useKeyboard, useRenderer } from "@opentui/react";
 import { T } from "./theme.ts";
 import type { Route } from "./routes.ts";
@@ -24,10 +24,28 @@ import { Keys } from "./screens/Keys.tsx";
 import { ClaudeUsage } from "./screens/ClaudeUsage.tsx";
 import { projectsRoot, recordProjectOpen } from "./lib/projects.ts";
 import { announceCd, announceRun, emitCd } from "./lib/cd.ts";
+import { isBusy, watchIdle } from "./lib/idle.ts";
+import { PAUSED_EXIT, RESUMABLE, screenLabel, writeResumeState, type ResumableRoute } from "./lib/pause.ts";
+import { processTable } from "./lib/ports.ts";
 
-export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string }) {
+const isResumable = (r: Route): r is ResumableRoute => RESUMABLE.has(r.name);
+
+export function App({
+  initialRoute,
+  initialStack,
+  pauseFile,
+  cwd,
+}: {
+  initialRoute: Route;
+  /** the screens a paused session was on — wins over initialRoute */
+  initialStack?: Route[];
+  /** set when bin/launch.mjs is waiting on us: idling out pauses */
+  pauseFile?: string;
+  cwd: string;
+}) {
   const renderer = useRenderer();
   const [stack, setStack] = useState<Route[]>(() => {
+    if (initialStack && initialStack.length > 0) return initialStack;
     if (initialRoute.name === "menu") return [{ name: "menu" }];
     // The project picker launched from the shell is the whole app — nothing to
     // go "back" to, so esc must quit rather than drop you in the menu.
@@ -51,6 +69,44 @@ export function App({ initialRoute, cwd }: { initialRoute: Route; cwd: string })
   }, [cwd, initialRoute.name]);
 
   const route = stack[stack.length - 1] ?? { name: "menu" as const };
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
+
+  // A minute with no input and nothing live → hand the memory back (bin/launch.mjs).
+  useEffect(() => {
+    if (!pauseFile) return;
+    return watchIdle(
+      () => isBusy(stackRef.current[stackRef.current.length - 1] ?? { name: "menu" }),
+      () => {
+        const current = stackRef.current;
+        // The shell's auto-launched picker is a launcher, not a workspace: just
+        // leave the user at their prompt (`proj` brings it back).
+        if (current.length === 1 && current[0]?.name === "projects") {
+          killAll();
+          renderer.destroy();
+          console.log("[2mdestedtui closed after a minute idle · proj reopens it[0m");
+          process.exit(0);
+        }
+        const keep: ResumableRoute[] = [];
+        for (const r of current) {
+          if (!isResumable(r)) break;
+          keep.push(r);
+        }
+        const stack: ResumableRoute[] = keep.length > 0 ? keep : [{ name: "menu" }];
+        const top = stack[stack.length - 1] ?? { name: "menu" };
+        writeResumeState(pauseFile, {
+          v: 1,
+          stack,
+          label: screenLabel(top),
+          commit: processTable().procs.get(process.pid)?.commit ?? 0,
+          pausedAt: Date.now(),
+        });
+        killAll();
+        renderer.destroy();
+        process.exit(PAUSED_EXIT);
+      },
+    );
+  }, [pauseFile, renderer]);
   const go = (r: Route) => setStack((s) => [...s, r]);
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
   const quit = () => {
