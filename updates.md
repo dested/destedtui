@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-10 — startup: iris, .NET sal-widgets, opt-in auto-start
+Asked: put sal-widgets in startup, don't start anything by default, and launch Iris from here. Done: sal-widgets runs `dotnet run --project src/SalWidgets -c Release` (the v2 rewrite). A new `iris` card runs sal-agent's `bun run app`; sal-agent stopped registering it at login. Opening the dashboard starts only the apps whose `◉ auto` is on (button or `t`, persisted as `startupAuto` in `~/.destedtui/config.json`, empty by default). tsc green; not launched in-session.
+Touched: src/lib/startup.ts, src/screens/Startup.tsx, cliffnotes.md
+
 ## 2026-10-10 — idle pause: a minute idle → exit, paused screen, click to resume
 Asked: old destedtui windows hog memory; live ~1 min, then pause, clear, click to resume. Done: the bins are now Node launchers (`bin/`). After 60s idle the Bun TUI saves its route stack and exits 75. `paused.mjs` shows where it was and what it gave back (~600 MB for Procs), and a click or key respawns it on the same screen. The shell picker just exits instead. Nothing pauses while busy. ~35 MB while paused. Re-ran `bun link`. tsc green, tmux round trips verified. Board #516.
 Touched: bin/*, src/{tui,App,index,keys,review}.tsx, src/lib/{idle,pause,run}.ts, package.json, tsconfig.json, plans/2026-10-07-memory-leak.md

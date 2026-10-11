@@ -98,7 +98,7 @@ src/
     ClaudeUsage.tsx     claude code usage: tabs 1 projects / 2 timeline (project × day heatmap) / 3 sessions (▶ resume) / 4 days, range chips, detail strip
     KeysRotate.tsx      the rotate screen (`R`): shared keys → overview/plan → confirmed walk → revoke; dead-key batch (`d`); --simulate
   lib/
-    startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all)
+    startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all, opt-in auto-start: config `startupAuto`)
     ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd (+ CPU time); kill-root chain walk, HTTP <title> probe, killServer; processTable() = every process for procs
     procs.ts            claude procs: ProcSampler (cpu rates between scans), session metadata (~/.claude/sessions, ~/.sal/status cards), units/groups/flags, killRoots (one batched taskkill), leftoverUnits
     bx.ts               bx monitor data: run files + /debug (zod mirror of bx's protocol), BxSampler (tree per daemon, orphans, 30-min Series history, slope, memlog), driversOf, stop/kill/gc/heapSnapshot, log tail
@@ -288,7 +288,7 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 ## Status
 
 - **Done** [Project picker](features/project-picker.md) · [Script runner](features/script-runner.md) · [PG backup](features/pg-backup.md) · [PG restore](features/pg-restore.md) — e2e verified against local PostgreSQL 18.3
-- **Done** Startup dashboard — boots/babysits the 6 dev servers (todolist/deck/drydock/chirptime/sal-widgets/sal-board); tile + `--startup` + typing "startup" in the picker. Layout verified in tmux; live console + Chrome launch not auto-smoke-tested (would spawn real servers).
+- **Done** Startup dashboard — boots/babysits 7 apps (todolist/deck/drydock/chirptime/sal-widgets (.NET)/iris (sal-agent's app)/sal-board). Nothing starts on open unless its card's `◉ auto` is on (`t`; saved as `startupAuto` in config.json); tile + `--startup` + typing "startup" in the picker. Layout verified in tmux; live console + Chrome launch not auto-smoke-tested (would spawn real servers).
 - **Done** Terminal multiplexer (`term`) — interactive shells & `claude` sessions in panes, add/switch/close, mouse-driven, guaranteed cleanup. tile + `--term` + typing "term" in the picker. Verified end-to-end in tmux (typed commands run, per-pane isolation, 0 orphans on quit/abrupt-close). Live `claude` spawn not auto-tested (would burn tokens) — plumbing is identical to shells.
 - **Done** [Review](features/review.md) — clean-context `claude-opus-4-8` code review as a second global bin (`review`): scope picker (uncommitted/staged/last commit/recent commits/branch/PR via gh), streaming tool feed, PASS/BLOCKED report, gated commit, `--headless` for the `/sal-review` skill. Absorbed from the retired `G:\code\sal-review` repo 2026-08-06; ledger dropped (see decisions.md).
 - **Done** Localhost (`ports`) — every node/bun listener with URL, page title, cwd, command, uptime, memory; `x` kills the whole dev-command chain (two-press; names exactly what dies + other ports in the same tree), `shift+x` just the listener; `a` shows every TCP listener. Menu tile + `--ports` + `ports` shell fn + typing "ports" in the picker. Verified in tmux: 200×46 and 100×30 renders, filter, keyboard + mouse kill of a throwaway `bun run dev` chain, `g` cd handoff.
