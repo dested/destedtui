@@ -20,7 +20,7 @@ export function Startup({ back }: Props) {
   const [frame, setFrame] = useState(0);
   const rev = useRef(-1);
 
-  // Auto-start the whole fleet the first time the dashboard opens. The manager
+  // Start the apps marked auto the first time the dashboard opens. The manager
   // guards against doing it twice, so coming back later leaves them running.
   useEffect(() => {
     startup.autoStart();
@@ -74,6 +74,8 @@ export function Startup({ back }: Props) {
         return startup.startAll();
       case "c":
         return startup.clearLog(sel.spec.id);
+      case "t":
+        return startup.toggleAuto(sel.spec.id);
     }
   });
 
@@ -91,6 +93,7 @@ export function Startup({ back }: Props) {
           ["r", "restart"],
           ["o", "open"],
           ["a", "all"],
+          ["t", "auto"],
           ["shift+x", "stop all"],
           ["esc", "back"],
         ]}
@@ -192,6 +195,11 @@ function AppRow({
         )}
         <Button label="⟳" color={T.yellow} onPress={() => startup.restart(app.spec.id)} />
         {url ? <Button label="↗ open" color={T.cyan} onPress={() => openInChrome(url)} /> : null}
+        <Button
+          label={startup.isAuto(app.spec.id) ? "◉ auto" : "○ auto"}
+          color={startup.isAuto(app.spec.id) ? T.teal : T.dim}
+          onPress={() => startup.toggleAuto(app.spec.id)}
+        />
       </box>
     </box>
   );
@@ -227,7 +235,7 @@ function Console({ app, frame }: { app: AppRuntime; frame: number }) {
         }}
       >
         {app.lines.length === 0 ? (
-          <text fg={T.dim}>{app.phase === "stopped" ? "not running — press s to start" : "…"}</text>
+          <text fg={T.dim}>{app.phase === "stopped" ? startup.isAuto(app.spec.id) ? "not running — press s to start" : "not running — s to start, t to start it whenever the dashboard opens" : "…"}</text>
         ) : (
           app.lines.map((line, i) => (
             <text key={i} fg={line.stream === "stderr" ? T.orange : line.stream === "info" ? T.dim : T.fg}>

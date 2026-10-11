@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { runCommand, type OutputLine, type ProcHandle } from "./run.ts";
 import { projectsRoot } from "./projects.ts";
+import { patchConfig, readConfig } from "./config.ts";
 import { T } from "../theme.ts";
 
 /** One dev server the startup dashboard supervises. */
@@ -29,11 +30,20 @@ const SPECS: Omit<AppSpec, "dir">[] = [
   { id: "deck", folder: "deck", name: "deck", command: "bun run dev", url: "http://localhost:12346", desktop: false, note: "bun · :12346", accent: T.purple },
   { id: "drydock", folder: "drydock", name: "drydock", command: "bun run dev", url: "http://localhost:4400", desktop: false, note: "bun · :4400", accent: T.cyan },
   { id: "chirptime", folder: "chirptime", name: "chirptime", command: "bun run dev", desktop: true, note: "tauri · window", accent: T.orange },
-  { id: "sal-widgets", folder: "sal-widgets", name: "sal-widgets", command: "bun run dev", desktop: true, note: "electron · window", accent: T.blue },
+  { id: "sal-widgets", folder: "sal-widgets", name: "sal-widgets", command: "dotnet run --project src/SalWidgets -c Release", desktop: true, note: "wpf · tray", accent: T.blue },
+  { id: "iris", folder: "sal-agent", name: "iris", command: "bun run app", desktop: true, note: "electron · tray", accent: T.pink },
   { id: "sal-board", folder: "sal-board", name: "sal-board", command: "bun run dev", url: "https://board.localhost", desktop: false, note: "bun · board.localhost", accent: T.yellow },
 ];
 
 export const APPS: AppSpec[] = SPECS.map((s) => ({ ...s, dir: join(projectsRoot(), s.folder) }));
+
+/** Config key: ids of the apps that start when the dashboard first opens. */
+const AUTO_KEY = "startupAuto";
+
+function readAuto(): Set<string> {
+  const raw = readConfig()[AUTO_KEY];
+  return new Set(Array.isArray(raw) ? raw.filter((x): x is string => typeof x === "string") : []);
+}
 
 export type Phase = "stopped" | "booting" | "ready" | "exited" | "crashed";
 
@@ -72,6 +82,8 @@ class StartupManager {
   /** Bumped on every mutation; the screen polls it to know when to re-render. */
   revision = 0;
   private autoStarted = false;
+  /** Opt-in: nothing starts on open unless Sal switched it on. */
+  private auto = readAuto();
 
   constructor() {
     for (const spec of APPS) {
@@ -92,11 +104,22 @@ class StartupManager {
     return APPS.map((s) => this.apps.get(s.id)!);
   }
 
-  /** Start every stopped app — used once when the dashboard first opens. */
+  /** Start the apps marked auto, once, the first time the dashboard opens. */
   autoStart(): void {
     if (this.autoStarted) return;
     this.autoStarted = true;
-    this.startAll();
+    for (const s of APPS) if (this.auto.has(s.id)) this.start(s.id);
+  }
+
+  isAuto(id: string): boolean {
+    return this.auto.has(id);
+  }
+
+  /** Flip whether an app starts on open; saved in ~/.destedtui/config.json. */
+  toggleAuto(id: string): void {
+    if (!this.auto.delete(id)) this.auto.add(id);
+    patchConfig({ [AUTO_KEY]: APPS.map((s) => s.id).filter((x) => this.auto.has(x)) });
+    this.revision++;
   }
 
   start(id: string): void {
