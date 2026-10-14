@@ -27,6 +27,7 @@ import { announceCd, announceRun, emitCd } from "./lib/cd.ts";
 import { isBusy, watchIdle } from "./lib/idle.ts";
 import { PAUSED_EXIT, RESUMABLE, screenLabel, writeResumeState, type ResumableRoute } from "./lib/pause.ts";
 import { processTable } from "./lib/ports.ts";
+import { runWindowsBin, windowsTarget, windowsUnavailable } from "./lib/winforward.ts";
 
 const isResumable = (r: Route): r is ResumableRoute => RESUMABLE.has(r.name);
 
@@ -107,7 +108,15 @@ export function App({
       },
     );
   }, [pauseFile, renderer]);
-  const go = (r: Route) => setStack((s) => [...s, r]);
+  const go = (r: Route) => {
+    // Linux build: a Windows-only screen runs as its Windows bin with the
+    // terminal handed over; we're back where we were when it exits.
+    const target = windowsTarget(r);
+    if (!target) return setStack((s) => [...s, r]);
+    if (windowsUnavailable(target.bin) !== null) return;
+    renderer.suspend();
+    void runWindowsBin(target, cwd).then(() => renderer.resume());
+  };
   const back = () => setStack((s) => (s.length > 1 ? s.slice(0, -1) : s));
   const quit = () => {
     killAll();

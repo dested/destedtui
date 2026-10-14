@@ -3,6 +3,7 @@ import { join } from "node:path";
 import type { Route } from "./routes.ts";
 
 const args = process.argv.slice(2);
+const linux = process.platform === "linux";
 
 if (args.includes("--help") || args.includes("-h")) {
   console.log(`destedtui — personal dev-project TUI
@@ -26,10 +27,10 @@ Usage:
   destedtui --claude    claude code usage: cost, tokens, sessions, timeline per project
   destedtui --usage     the same, printed (--days 1|7|30|90|all, --project <name>, --json)
 
-  destedtui --install-shell   add \`proj\` + auto-launch to your PowerShell profile
-
+  destedtui --install-shell   add \`proj\` + auto-launch to your ${linux ? "~/.zshrc.local" : "PowerShell profile"}
+${linux ? "\n  In WSL, --startup and --bx are Windows-only (destedtui.exe), and keys runs keys.exe.\n" : ""}
 Utilities:
-  Projects        every folder in g:\\code, ranked by how often you open it
+  Projects        every folder in ${linux ? "/w/code" : "g:\\code"}, ranked by how often you open it
   Scripts         find every package.json script in the tree and run it
   PG Backup       dump the DATABASE_URL database (any pg 9.4+) to a zip
   PG Restore      restore a zip/dump/.sql — original server or localhost
@@ -37,14 +38,22 @@ Utilities:
   Pull to Local   dump a remote/.env DB and restore it into localhost, one shot
   Review          clean-context claude code review — changes, commits, branch, or a PR
 
-Postgres client tools are auto-downloaded per server version and cached
-in ~/.destedtui/pg. Nothing to install.`);
+${
+    linux
+      ? "Postgres client tools come from /usr/lib/postgresql/<major>/bin (apt-installed on demand)."
+      : "Postgres client tools are auto-downloaded per server version and cached\nin ~/.destedtui/pg. Nothing to install."
+  }`);
   process.exit(0);
 }
 
 if (args.includes("--version") || args.includes("-v")) {
   console.log("destedtui 0.1.0");
   process.exit(0);
+}
+
+if (args.includes("--install-shell") && linux) {
+  const { installZsh } = await import("./lib/installShell.ts");
+  process.exit(installZsh(args.includes("--uninstall")));
 }
 
 if (args.includes("--install-shell")) {
@@ -67,6 +76,25 @@ if (args.includes("--ports") && args.includes("--json")) {
 if (args.includes("--usage")) {
   const { runUsageCli } = await import("./lib/claude/cli.ts");
   process.exit(runUsageCli(args));
+}
+
+// WSL: startup and bx drive Windows servers and browsers; keys is the one
+// Windows DPAPI vault. The tiles hand over to the Windows bins (lib/winforward.ts).
+if (linux) {
+  for (const flag of ["--startup", "--bx"]) {
+    if (!args.includes(flag)) continue;
+    console.error(`${flag} is Windows-only here: run destedtui.exe ${flag}`);
+    process.exit(1);
+  }
+  if (args.includes("--keys")) {
+    const { runWindowsBin, windowsUnavailable } = await import("./lib/winforward.ts");
+    const why = windowsUnavailable("keys");
+    if (why) {
+      console.error(`--keys: ${why}`);
+      process.exit(1);
+    }
+    process.exit(await runWindowsBin({ bin: "keys", args: [] }, process.cwd()));
+  }
 }
 
 let initialRoute: Route = { name: "menu" };

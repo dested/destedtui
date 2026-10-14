@@ -5,6 +5,10 @@ import { Footer } from "../components/Footer.tsx";
 import type { Discovery } from "../lib/discovery.ts";
 import { projectsRoot } from "../lib/projects.ts";
 import type { Route } from "../routes.ts";
+import { windowsTarget, windowsUnavailable } from "../lib/winforward.ts";
+
+/** Tiles that open a Windows bin in the Linux build (lib/winforward.ts). */
+const WINDOWS_TILES: Record<string, Route> = { startup: { name: "startup" }, bx: { name: "bx" }, keys: { name: "keys" } };
 
 interface Props {
   discovery: Discovery | null;
@@ -140,6 +144,15 @@ export function MainMenu({ discovery, go, quit }: Props) {
     { id: "env", icon: "☰", title: ".env Inspector", subtitle: "diff envs, spot missing keys", badge: "coming soon", disabled: true },
     { id: "nuke", icon: "✕", title: "node_modules Nuker", subtitle: "reclaim disk from dead installs", badge: "coming soon", disabled: true },
   ];
+  for (const item of items) {
+    const route = WINDOWS_TILES[item.id];
+    const target = route ? windowsTarget(route) : null;
+    if (!target) continue;
+    const unavailable = windowsUnavailable(target.bin) !== null;
+    item.badge = unavailable ? "Windows only" : "windows";
+    if (unavailable) item.badgeColor = T.dim;
+    item.disabled = unavailable;
+  }
 
   return (
     <box style={{ flexGrow: 1, flexDirection: "column" }}>

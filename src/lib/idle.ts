@@ -2,6 +2,7 @@ import type { Route } from "../routes.ts";
 import { idleMs } from "./pause.ts";
 import { runningCount } from "./run.ts";
 import { term } from "./term.ts";
+import { forwarding } from "./winforward.ts";
 
 /**
  * Screens whose state can't survive a restart: a script's output, a review in
@@ -28,7 +29,7 @@ function busyRoute(route: Route): boolean {
  * dev servers, pg tools, the reviewer, scripts) or an open terminal pane.
  */
 export function isBusy(top: Route): boolean {
-  return busyRoute(top) || runningCount() > 0 || term.count() > 0;
+  return busyRoute(top) || runningCount() > 0 || term.count() > 0 || forwarding();
 }
 
 /**

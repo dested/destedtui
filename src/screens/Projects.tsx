@@ -27,6 +27,8 @@ import {
   type ProjectInfo,
   type SortMode,
 } from "../lib/projects.ts";
+import { windowsTarget, windowsUnavailable } from "../lib/winforward.ts";
+import type { Route } from "../routes.ts";
 
 interface Props {
   root: string;
@@ -89,6 +91,14 @@ const ACTIONS: ActionSpec[] = [
   },
 ];
 
+/** Linux build: startup and keys open their Windows bins, and drop out when those can't run. */
+const WINDOWS_ACTIONS: Record<string, Route> = { startup: { name: "startup" }, keys: { name: "keys" } };
+const AVAILABLE_ACTIONS = ACTIONS.filter((a) => {
+  const route = WINDOWS_ACTIONS[a.id];
+  const target = route ? windowsTarget(route) : null;
+  return !target || windowsUnavailable(target.bin) === null;
+});
+
 /** Same shape as matchCommand: an exactly-typed action name wins outright. */
 function matchAction(action: ActionSpec, q: string): Match | null {
   if (!q) return null; // only surface actions once you're typing
@@ -144,7 +154,7 @@ export function Projects({ root, cwd, choose, run, openStartup, openTerm, openPo
     // Built-in actions pin to the very top (they only appear once you type):
     // "startup" should be one keystroke away, never buried under projects.
     const acts: { cell: Cell; s: number }[] = [];
-    for (const action of ACTIONS) {
+    for (const action of AVAILABLE_ACTIONS) {
       const m = matchAction(action, q);
       if (m) acts.push({ cell: { kind: "action", key: `act:${action.id}`, action, positions: m.positions }, s: m.score });
     }
