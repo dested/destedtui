@@ -3,6 +3,7 @@
 // Values reach stdout only through `reveal` and `values --yes-print-secret`;
 // neither prints inside Claude Code (reveal still copies to the clipboard there).
 
+import { join } from "node:path";
 import { clearClipboard, readClipboard, writeClipboard } from "./lib/keys/win32.ts";
 import { UserError } from "./lib/keys/errors.ts";
 import { findKey, readVault, reuseGroups, VAULT_PATH, type ReuseGroup } from "./lib/keys/vault.ts";
@@ -86,7 +87,8 @@ usage:
   keys reveal <id>                       print one value + copy it to the clipboard
   keys copy <id>                         copy one value to the clipboard
 
---project defaults to the project folder you're standing in (under the projects root).
+--project is a folder name under W:\\code or G:\\code (defaults to the one you're standing in).
+A project in both is two copies: .env writes and revokes go to each.
 Lists show fingerprints (sha256 prefix); reveal/copy (or ⧉ in the screen) for the value. The value never goes on argv.
 
 exit codes: 0 ok · 1 usage / user error · 2 provider API error`;
@@ -217,8 +219,8 @@ function printEnv(r: EnvWriteResult, dryRun: boolean): void {
     out(changed.length ? `${verb} ${plan.file}: ${changed.map((c) => `${c.change} ${c.envVar}`).join(", ")}` : `${plan.file}: up to date`);
   }
   for (const i of r.ignore) {
-    if (i.added) out(`added ${i.file} to ${r.project}/.gitignore`);
-    if (i.tracked) out(`⚠ ${r.project}/${i.file} is COMMITTED to git — .gitignore can't help; the keys in it are in history. git rm --cached it and rotate them.`);
+    if (i.added) out(`added ${i.file} to ${join(i.dir, ".gitignore")}`);
+    if (i.tracked) out(`⚠ ${join(i.dir, i.file)} is COMMITTED to git — .gitignore can't help; the keys in it are in history. git rm --cached it and rotate them.`);
   }
 }
 
@@ -497,7 +499,7 @@ async function run(argv: string[]): Promise<number> {
       for (const i of report.imported) out(`  + ${i.project.padEnd(24)} ${i.providerId.padEnd(11)} fp ${i.fingerprint}  ${i.file} ${i.envVar}`);
       if (report.conflicts.length) {
         out(`${report.conflicts.length} not stored (a different key for the same provider is already this project's):`);
-        for (const c of report.conflicts) out(`  ! ${c.project.padEnd(24)} ${c.providerId.padEnd(11)} fp ${c.fingerprint}  ${c.file} ${c.envVar}  (kept ${c.kept})`);
+        for (const c of report.conflicts) out(`  ! ${c.project.padEnd(24)} ${c.providerId.padEnd(11)} fp ${c.fingerprint}  ${join(c.dir, c.file)} ${c.envVar}  (kept ${c.kept})`);
       }
       out();
       printReuse(report.reuse, await deployedMap(readVault()));

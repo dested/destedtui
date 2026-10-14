@@ -7,7 +7,8 @@ description: Sal's API-key vault (`keys` CLI, from destedtui). Use whenever an A
 
 `keys` is a global bin (destedtui). The vault is DPAPI-encrypted at
 `~/.destedtui/keys/vault.bin`. Every key belongs to one project (a folder under
-`G:\code`, or `shared`) and one provider. Output shows **fingerprints** (sha256
+`W:\code` or `G:\code`, or `shared`) and one provider. A project in both is two
+copies of one project: `.env` writes and revokes go to each. Output shows **fingerprints** (sha256
 prefix), never values.
 
 ## Hard rules

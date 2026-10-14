@@ -456,8 +456,9 @@ async function retireValue(fp: string): Promise<{ records: number; envRemoved: s
   for (const k of live) {
     if (k.project === "shared") continue;
     try {
-      const p = resolveProject(k.project);
-      if (p.dir && removeFromEnv(join(p.dir, k.envFile), envVarFor(v, k), k.value)) envRemoved.push(k.project);
+      let removed = false;
+      for (const dir of resolveProject(k.project).dirs) if (removeFromEnv(join(dir, k.envFile), envVarFor(v, k), k.value)) removed = true;
+      if (removed) envRemoved.push(k.project);
     } catch {
       /* folder gone */
     }

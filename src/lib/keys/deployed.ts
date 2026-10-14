@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, readdirSync, renameSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
-import { projectsRoot } from "../projects.ts";
+import { projectRoots } from "../projects.ts";
 import { envPrints, listApps, type DrydockApp } from "./drydock.ts";
 import { mutate, VAULT_DIR, type Provider, type Vault } from "./vault.ts";
 import { UserError } from "./errors.ts";
@@ -61,26 +61,31 @@ export interface FolderIndex {
   byRepo: Map<string, string[]>;
 }
 
-export function folderIndex(root = projectsRoot()): FolderIndex {
+/** Folder names across every projects root; a project under two roots counts once (the first root's copy). */
+export function folderIndex(roots = projectRoots()): FolderIndex {
   const byRepo = new Map<string, string[]>();
   const folders: string[] = [];
-  let names: string[] = [];
-  try {
-    names = readdirSync(root);
-  } catch {
-    return { folders, byRepo };
-  }
-  for (const name of names) {
-    if (name.startsWith(".")) continue;
-    const dir = join(root, name);
+  const seen = new Set<string>();
+  for (const root of roots) {
+    let names: string[];
     try {
-      if (!statSync(dir).isDirectory()) continue;
+      names = readdirSync(root);
     } catch {
       continue;
     }
-    folders.push(name);
-    const repo = originOf(dir);
-    if (repo) byRepo.set(repo, [...(byRepo.get(repo) ?? []), name]);
+    for (const name of names) {
+      if (name.startsWith(".") || seen.has(name.toLowerCase())) continue;
+      const dir = join(root, name);
+      try {
+        if (!statSync(dir).isDirectory()) continue;
+      } catch {
+        continue;
+      }
+      seen.add(name.toLowerCase());
+      folders.push(name);
+      const repo = originOf(dir);
+      if (repo) byRepo.set(repo, [...(byRepo.get(repo) ?? []), name]);
+    }
   }
   return { folders, byRepo };
 }
@@ -183,7 +188,7 @@ export async function setOverride(app: string, folder: string | null): Promise<v
   if (folder && folder !== "-") {
     const want = folder.toLowerCase();
     const hit = folderIndex().folders.find((f) => f.toLowerCase() === want);
-    if (!hit) throw new UserError(`no folder "${folder}" in ${projectsRoot()}`);
+    if (!hit) throw new UserError(`no folder "${folder}" in ${projectRoots().join(" or ")}`);
     target = hit;
   }
   await mutate((v) => {

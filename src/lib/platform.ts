@@ -16,6 +16,8 @@ export const WSL_DISTRO = process.env.DESTEDTUI_WSL_DISTRO || "sal";
 /** The projects root on each side. */
 export const WIN_DEFAULT_ROOT = "G:\\code";
 export const LINUX_DEFAULT_ROOT = "/w/code";
+/** The distro's projects root (`/w/code`) as Windows sees it. */
+export const WIN_WSL_ROOT = "W:\\code";
 
 /** True inside WSL, where Windows binaries run through interop. */
 export function isWsl(): boolean {
@@ -25,6 +27,11 @@ export function isWsl(): boolean {
 /** The Windows user's home folder as Linux sees it (`/mnt/c/Users/dested`). */
 export function winHome(): string {
   return process.env.DESTEDTUI_WIN_HOME || `/mnt/c/Users/${userInfo().username}`;
+}
+
+/** The distro user's home as Windows sees it (`\\wsl.localhost\sal\home\dested`). */
+export function wslHome(): string {
+  return process.env.DESTEDTUI_WSL_HOME || `\\\\wsl.localhost\\${WSL_DISTRO}\\home\\${userInfo().username}`;
 }
 
 /** The Windows-side bun-linked bins (`destedtui.exe`, `keys.exe`), Linux path. */
@@ -52,4 +59,13 @@ export function winToLinux(p: string): string | null {
   const unc = /^[\\/]{2}(?:wsl\.localhost|wsl\$)[\\/]([^\\/]+)(?:[\\/](.*))?$/i.exec(p);
   if (unc && unc[1]?.toLowerCase() === WSL_DISTRO.toLowerCase()) return `/${(unc[2] ?? "").replace(/\\/g, "/")}`;
   return null;
+}
+
+/** `/w/code/x` → `W:\code\x`; `/mnt/g/x` → `G:\x`; any other distro path → `\\wsl.localhost\sal\x`. */
+export function linuxToWin(p: string): string {
+  const w = /^\/w(?:\/(.*))?$/.exec(p);
+  if (w) return `W:\\${(w[1] ?? "").replace(/\//g, "\\")}`;
+  const mnt = /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/.exec(p);
+  if (mnt?.[1]) return `${mnt[1].toUpperCase()}:\\${(mnt[2] ?? "").replace(/\//g, "\\")}`;
+  return `\\\\wsl.localhost\\${WSL_DISTRO}${p.replace(/\//g, "\\")}`;
 }

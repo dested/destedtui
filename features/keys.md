@@ -10,6 +10,12 @@ console page and takes the key off the clipboard, so a secret never passes throu
 a Claude transcript. Writes each project's keys into its gitignored `.env`. Finds keys
 already sitting in `.env` files and reports the ones reused across projects.
 
+A project is a folder under `W:\code` (repos moved into the WSL distro) or `G:\code`. One
+in both is two copies of one project: `.env` writes, revokes and rotate steps go to each,
+`import` counts a line present in both copies once, and a different value in each is
+reported as a conflict with its path. `--project` and the cwd resolve against both roots,
+from Windows or through the WSL bridge.
+
 Surfaces: the third global bin `keys` (CLI first — Claude sessions drive it), the Keys
 screen (`keys` with no args, `destedtui --keys`, the menu tile, typing `keys` in the
 picker), the `keys` Claude skill (`skill/keys/SKILL.md`), and PowerShell's `Use-Keys`.

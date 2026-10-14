@@ -1,9 +1,9 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { readConfig, patchConfig } from "./config.ts";
 import { fuzzyMatch, type Match } from "./fuzzy.ts";
-import { IS_LINUX, IS_WIN, LINUX_DEFAULT_ROOT, WIN_DEFAULT_ROOT } from "./platform.ts";
+import { IS_LINUX, IS_WIN, LINUX_DEFAULT_ROOT, WIN_DEFAULT_ROOT, WIN_WSL_ROOT } from "./platform.ts";
 
 export interface ProjectInfo {
   /** Absolute project directory */
@@ -32,13 +32,26 @@ export type SortMode = "frecency" | "modified" | "name";
 
 const SKIP = new Set(["node_modules", "__pycache__", "$recycle.bin", "system volume information"]);
 
-/** Where the projects live. Config wins over the platform default; env wins over both. */
+/** Where the projects live. Config wins over the platform default; env wins over both (its first entry, when it's a list). */
 export function projectsRoot(): string {
-  const fromEnv = process.env.DESTEDTUI_PROJECTS_ROOT;
+  const fromEnv = process.env.DESTEDTUI_PROJECTS_ROOT?.split(delimiter).find(Boolean);
   if (fromEnv) return fromEnv;
   const fromConfig = readConfig().projectsRoot;
   if (typeof fromConfig === "string" && fromConfig) return fromConfig;
   return IS_WIN ? WIN_DEFAULT_ROOT : IS_LINUX ? LINUX_DEFAULT_ROOT : join(homedir(), "code");
+}
+
+/**
+ * Every root a project can live under, preferred first. keys uses this: on
+ * Windows a project is in W:\code (moved into WSL), G:\code, or both. Env
+ * pins it (a `path.delimiter` list for more than one root); config pins one.
+ */
+export function projectRoots(): string[] {
+  const fromEnv = process.env.DESTEDTUI_PROJECTS_ROOT?.split(delimiter).filter(Boolean);
+  if (fromEnv?.length) return fromEnv;
+  const fromConfig = readConfig().projectsRoot;
+  if (typeof fromConfig === "string" && fromConfig) return [fromConfig];
+  return IS_WIN ? [WIN_WSL_ROOT, WIN_DEFAULT_ROOT] : [projectsRoot()];
 }
 
 /** Case- and separator-insensitive key for a path (Windows paths are both). */

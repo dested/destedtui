@@ -93,7 +93,7 @@ if (linux) {
       console.error(`--keys: ${why}`);
       process.exit(1);
     }
-    process.exit(await runWindowsBin({ bin: "keys", args: [] }, process.cwd()));
+    process.exit(await runWindowsBin({ bin: "keys", args: [], pinRoot: false }, process.cwd()));
   }
 }
 

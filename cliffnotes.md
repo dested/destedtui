@@ -1,7 +1,7 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-10-13.
+> Last updated: 2026-10-14.
 
 ## What this is
 
@@ -17,7 +17,7 @@ Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that li
   - ports/procs read `/proc` (`/proc/net/tcp{,6}` + fd inodes); kill = SIGTERM to the process group/session/descendants, then SIGKILL after 2s from a detached `sh` reaper (`posixTreeKill`); scripts run `/bin/sh -c` in their own session (`detached`)
   - term keeps the Node sidecar; panes are `zsh -l -i` (claude pane `zsh -lic "<claude>; exec zsh"`) with `DESTEDTUI_NO_AUTOSTART=1` and `SAL_NO_PICK=1`
   - pg tools from `/usr/lib/postgresql/<major>/bin`, `sudo -n apt-get install -y postgresql-client-<major>` when missing
-  - **keys** is a bridge: the Linux `keys` bin execs `/mnt/c/Users/dested/.bun/bin/keys.exe` (`forwardToWindows` in `bin/launch.mjs`) with `DESTEDTUI_PROJECTS_ROOT=W:\code` through `WSLENV`; the Windows side folds a `\\wsl.localhost\sal\w\…` cwd to `W:\…` and asks Linux git (`wsl.exe -d sal --exec /usr/bin/git -C /w/…`) about `.gitignore` for anything under `W:\`
+  - **keys** is a bridge: the Linux `keys` bin execs `/mnt/c/Users/dested/.bun/bin/keys.exe` (`forwardToWindows` in `bin/launch.mjs`), no root pinned (`DESTEDTUI_WIN_PROJECTS_ROOT` pins one). keys on Windows always searches **both** `W:\code` and `G:\code` (`projectRoots()`); a project in both is two copies and every `.env` write, revoke and rotate step hits each. The Windows side folds a `\\wsl.localhost\sal\w\…` cwd to `W:\…`, asks Linux git (`gitCommand` in `lib/keys/envfile.ts`) about anything under `W:\`, and counts the distro's `~/.claude/history.jsonl` as activity
   - **startup / bx / keys tiles** suspend the renderer and run `destedtui.exe --startup|--bx` / `keys.exe` with the terminal (`lib/winforward.ts`), resuming when it exits; `--startup`/`--bx` on the CLI exit 1 with a pointer to `destedtui.exe`
   - Chrome is the Windows one through interop; ports' copy-url uses `clip.exe`
 - **Type-check:** `bun x tsc --noEmit` (run it in the Linux copy too)
@@ -108,8 +108,8 @@ src/
     KeysRotate.tsx      the rotate screen (`R`): shared keys → overview/plan → confirmed walk → revoke; dead-key batch (`d`); --simulate
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all, opt-in auto-start: config `startupAuto`)
-    platform.ts         Windows ↔ WSL: IS_WIN/IS_LINUX, isWsl, winHome, winBin, normalizeWslUnc (`\\wsl.localhost\sal\w\x` → `W:\x`), winToLinux (`W:\x` → `/w/x`)
-    winforward.ts       Linux build: windowsTarget(route) (startup/bx/bxProfiles/keys → a Windows bin), windowsUnavailable, runWindowsBin (terminal handed over, root as W:\code via WSLENV), forwarding() for the idle pause
+    platform.ts         Windows ↔ WSL: IS_WIN/IS_LINUX, isWsl, winHome, wslHome, winBin, WIN_WSL_ROOT, normalizeWslUnc (`\\wsl.localhost\sal\w\x` → `W:\x`), winToLinux (`W:\x` → `/w/x`), linuxToWin (`/w/x` → `W:\x`)
+    winforward.ts       Linux build: windowsTarget(route) (startup/bx/bxProfiles/keys → a Windows bin), windowsUnavailable, runWindowsBin (terminal handed over; startup/bx get the root pinned to W:\code via WSLENV, keys doesn't), forwarding() for the idle pause
     installShell.ts     Linux `--install-shell`: the marked block in ~/.zshrc.local (`--uninstall` removes it)
     proc.linux.ts       /proc readers (stat, cmdline, cwd/exe links, statm), treeOf, posixTreeKill (SIGTERM now, detached sh reaper SIGKILLs after 2s)
     ports.linux.ts      linuxLayer: the ports/procs OsLayer over /proc/net/tcp{,6} + fd socket inodes; details cached per pid:starttime
@@ -215,10 +215,11 @@ src/
 | What the card buttons run | `detectStack` → `devCommand` in `lib/projects.ts`; `CLAUDE_COMMAND` in `ProjectCard.tsx` |
 | When the picker auto-opens | `Test-DestedTuiAutostart` in `shell/destedtui.ps1`; `_destedtui_autostart` in `shell/destedtui.zsh` |
 | Projects root (default `g:\code`, `/w/code` on Linux) | `projectsRoot()` — `DESTEDTUI_PROJECTS_ROOT` > config `projectsRoot` > platform default |
+| Where keys looks for a project (`W:\code` then `G:\code`) | `projectRoots()` in `lib/projects.ts`; `resolveProject` (`dirs` = every copy) + `projectFromCwd` in `lib/keys/ops.ts` |
 | Anything that differs between Windows and WSL | `src/lib/platform.ts` first; then the `*.linux.ts` siblings; grep `IS_WIN` for the rest |
 | A Windows-only screen opened from WSL | `windowsTarget` in `src/lib/winforward.ts` (+ `go` in `App.tsx`, `WINDOWS_TILES` in `MainMenu.tsx`, `WINDOWS_ACTIONS` in `Projects.tsx`) |
 | Linux config seeding from Windows | `seedFromWindows` in `src/lib/config.ts` |
-| keys from WSL | `forwardToWindows` in `bin/launch.mjs` (bin side), `projectFromCwd` in `lib/keys/ops.ts` + `git()` in `lib/keys/envfile.ts` (Windows side) |
+| keys from WSL | `forwardToWindows` in `bin/launch.mjs` (bin side), `projectFromCwd` in `lib/keys/ops.ts` + `gitCommand` in `lib/keys/envfile.ts` (Windows side) |
 | Colors / look | `src/theme.ts` (+ `ui.md`) |
 | What gets discovered in a project | `src/lib/discovery.ts` (SKIP_DIRS, DB_URL_KEYS, maxDepth=4) |
 | Supported pg versions / download URLs | `src/lib/pgtools.ts` → `EDB_CANDIDATES`, `MAJOR_ORDER` |
@@ -291,7 +292,8 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **The localhost scanner's PEB offsets are x64** (`ProcessParameters` @0x20, `CurrentDirectory` @0x38, `CommandLine` @0x70). A 32-bit target would need the WOW64 PEB; node/bun are 64-bit, and a failed read just leaves cwd empty (row shows `·`). Processes owned by SYSTEM/other users can't be opened — same empty result, by design.
 - **HTTP probes mark a port `http` the moment headers arrive** and read `<title>` best-effort from the first chunks — an SSR stream may never end, and timing out the body used to misreport live servers as "not http". Self-signed TLS (portless :443) is accepted.
 - **Values show only on request.** Lists, `--json`, errors: fingerprints only. The screen's ⧉ row button (`c`) copies a value and shows it in the status line; `keys reveal <id>` prints + copies, `keys copy <id>` copies. Inside Claude Code (`CLAUDECODE` set) reveal copies but never prints, and `values` still needs `--yes-print-secret` and refuses there. Keys enter via clipboard (`--clipboard`, cleared after) or `--stdin`, never argv. Provider error bodies are echoed only for non-2xx (a 2xx body may hold the key).
-- **Test the vault against a scratch dir:** `KEYS_VAULT_DIR=<scratch>/vault DESTEDTUI_PROJECTS_ROOT=<scratch>/root`. The real vault is at `~/.destedtui/keys`.
+- **Test the vault against a scratch dir:** `KEYS_VAULT_DIR=<scratch>/vault DESTEDTUI_PROJECTS_ROOT=<scratch>/root`. The real vault is at `~/.destedtui/keys`. Two roots: a `path.delimiter` list (`W:\junk\t\w;G:\junk\t\g` on Windows).
+- **`keys.exe` runs the `G:\code\destedtui` copy** (the Windows bun global link points there). A keys change made in `/w/code/destedtui` does nothing for `keys.exe`, and so nothing for `keys` in WSL, until the G: copy has it. To test it before then, run the W: copy with Windows bun: `/mnt/c/Users/dested/.bun/bin/bun.exe W:/code/destedtui/src/keys.tsx …` with the scratch env in `WSLENV`.
 - **Remote revoke is skipped while the same value is active in another project** — imported keys are mostly shared; revoking one remotely would break the rest.
 - **Rotation never revokes before the finish.** Steps retire a project's old record locally only; the remote revoke happens once, after every new-key project is verified and a fresh Drydock read shows no app on the old value.
 - **psmux mangles opentui diff frames** (runs of unchanged spaces collapse in `capture-pane`), so a screen you navigate *to* looks torn in tmux. Frames for review: `scripts/snap-keys.tsx` (opentui's test renderer), or launch straight into the view.

@@ -2,9 +2,9 @@
 // results come back as data with fingerprints, never values.
 
 import { existsSync, readdirSync, statSync } from "node:fs";
-import { join, relative, sep } from "node:path";
+import { isAbsolute, join, relative, sep } from "node:path";
 import { normalizeWslUnc } from "../platform.ts";
-import { projectsRoot } from "../projects.ts";
+import { projectRoots } from "../projects.ts";
 import { openInChrome } from "../run.ts";
 import { ADAPTERS, type AdminInput, type MintAdapter } from "./adapters/index.ts";
 import { ProviderError, UserError } from "./errors.ts";
@@ -35,35 +35,54 @@ export const SHARED = "shared";
 export interface ProjectRef {
   /** The folder name as it is on disk (or "shared"). */
   slug: string;
-  /** Absolute folder, null for "shared". */
-  dir: string | null;
+  /**
+   * Every copy of the folder, one per projects root that has it (W:\code before
+   * G:\code); empty for "shared". .env writes and removals go to all of them.
+   */
+  dirs: string[];
 }
 
-/** Resolve a project name to its folder under the projects root, case-insensitively. */
+/** Resolve a project name to its folder in every projects root, case-insensitively. */
 export function resolveProject(name: string): ProjectRef {
-  if (name.toLowerCase() === SHARED) return { slug: SHARED, dir: null };
-  if (name.includes("/") || name.includes("\\") || name.startsWith(".")) throw new UserError(`project must be a folder name under ${projectsRoot()}, got "${name}"`);
-  const root = projectsRoot();
-  let hit: string | undefined;
-  try {
-    hit = readdirSync(root).find((n) => n.toLowerCase() === name.toLowerCase());
-  } catch {
-    throw new UserError(`can't read the projects root ${root}`);
+  if (name.toLowerCase() === SHARED) return { slug: SHARED, dirs: [] };
+  const roots = projectRoots();
+  const where = roots.join(" or ");
+  if (name.includes("/") || name.includes("\\") || name.startsWith(".")) throw new UserError(`project must be a folder name under ${where}, got "${name}"`);
+  let slug: string | undefined;
+  const dirs: string[] = [];
+  let readable = 0;
+  for (const root of roots) {
+    let hit: string | undefined;
+    try {
+      hit = readdirSync(root).find((n) => n.toLowerCase() === name.toLowerCase());
+      readable++;
+    } catch {
+      continue;
+    }
+    if (!hit) continue;
+    const dir = join(root, hit);
+    if (!statSync(dir, { throwIfNoEntry: false })?.isDirectory()) continue;
+    slug ??= hit;
+    dirs.push(dir);
   }
-  if (!hit) throw new UserError(`no folder "${name}" in ${root} (use "${SHARED}" for a key that belongs to no project)`);
-  const dir = join(root, hit);
-  if (!statSync(dir).isDirectory()) throw new UserError(`${dir} is not a folder`);
-  return { slug: hit, dir };
+  if (readable === 0) throw new UserError(`can't read the projects root ${where}`);
+  if (!slug) throw new UserError(`no folder "${name}" in ${where} (use "${SHARED}" for a key that belongs to no project)`);
+  return { slug, dirs };
 }
 
 /**
- * The project the cwd is inside (first path segment under the projects root), if any.
+ * The project the cwd is inside (first path segment under a projects root), if any.
  * Launched from WSL, a Windows cwd is `\\wsl.localhost\sal\w\…`: that's `W:\…`.
  */
-export function projectFromCwd(cwd: string): string | undefined {
-  const rel = relative(projectsRoot(), normalizeWslUnc(cwd));
-  if (!rel || rel.startsWith("..") || /^[a-zA-Z]:/.test(rel)) return undefined;
-  return rel.split(sep)[0] || undefined;
+export function projectFromCwd(cwd: string, roots = projectRoots()): string | undefined {
+  const here = normalizeWslUnc(cwd);
+  for (const root of roots) {
+    const rel = relative(root, here);
+    if (!rel || rel.startsWith("..") || isAbsolute(rel)) continue;
+    const top = rel.split(sep)[0];
+    if (top) return top;
+  }
+  return undefined;
 }
 
 function sameProject(a: string, b: string): boolean {
@@ -264,7 +283,7 @@ async function store(
       result.replaced.remoteNote = `remote revoke failed (${err instanceof Error ? err.message : String(err)}) — delete it in the console`;
     }
   }
-  if (opts.writeEnv !== false && project.dir) result.env = await writeEnv(project.slug, false);
+  if (opts.writeEnv !== false && project.dirs.length > 0) result.env = await writeEnv(project.slug, false);
   result.key = mustView(stored.id);
   return result;
 }
@@ -335,13 +354,17 @@ export async function addKey(opts: StoreOptions, rawValue: string): Promise<Stor
 export interface EnvWriteResult {
   project: string;
   plans: EnvPlan[];
-  ignore: (IgnoreResult & { file: string })[];
+  /** Per copy of the project (`dir`) and env file. */
+  ignore: (IgnoreResult & { file: string; dir: string })[];
 }
 
-/** Write a project's active keys into its env file(s). Values stay in the file; the result carries var names only. */
+/**
+ * Write a project's active keys into its env file(s), in every copy of the
+ * project. Values stay in the file; the result carries var names only.
+ */
 export async function writeEnv(projectName: string, dryRun: boolean): Promise<EnvWriteResult> {
   const project = resolveProject(projectName);
-  if (!project.dir) throw new UserError(`"${SHARED}" keys have no project folder to write a .env into`);
+  if (project.dirs.length === 0) throw new UserError(`"${SHARED}" keys have no project folder to write a .env into`);
   const v = readVault();
   const keys = v.keys.filter((k) => isActive(k) && sameProject(k.project, project.slug));
   const byFile = new Map<string, Record<string, string>>();
@@ -351,11 +374,11 @@ export async function writeEnv(projectName: string, dryRun: boolean): Promise<En
     byFile.set(k.envFile, vars);
   }
   const result: EnvWriteResult = { project: project.slug, plans: [], ignore: [] };
-  for (const [file, vars] of byFile) {
-    const abs = join(project.dir, file);
-    if (!dryRun) result.ignore.push({ file, ...ensureIgnored(project.dir, file) });
-    result.plans.push(upsertEnv(abs, vars, dryRun));
-  }
+  for (const dir of project.dirs)
+    for (const [file, vars] of byFile) {
+      if (!dryRun) result.ignore.push({ file, dir, ...ensureIgnored(dir, file) });
+      result.plans.push(upsertEnv(join(dir, file), vars, dryRun));
+    }
   return result;
 }
 
@@ -441,8 +464,7 @@ export async function revokeKey(id: string, opts: { localOnly?: boolean; keepEnv
   let envRemoved = false;
   if (!opts.keepEnv && key.project !== SHARED) {
     try {
-      const project = resolveProject(key.project);
-      if (project.dir) envRemoved = removeFromEnv(join(project.dir, key.envFile), envVarFor(v, key), key.value);
+      for (const dir of resolveProject(key.project).dirs) if (removeFromEnv(join(dir, key.envFile), envVarFor(v, key), key.value)) envRemoved = true;
     } catch {
       /* project folder gone — nothing to clean */
     }
@@ -458,13 +480,35 @@ export interface ImportReport {
   imported: { id: string; project: string; providerId: string; fingerprint: string; file: string; envVar: string }[];
   known: number;
   /** A second, different key for the same provider in one project — not stored (one key per project per provider). */
-  conflicts: { project: string; providerId: string; fingerprint: string; file: string; envVar: string; kept: string }[];
+  conflicts: { project: string; dir: string; providerId: string; fingerprint: string; file: string; envVar: string; kept: string }[];
   reuse: ReuseGroup[];
 }
 
+/**
+ * Scan every root. A project under two roots is two copies of one project: the
+ * same line in both is one finding (the first root's), a different value is a conflict.
+ */
+function scanRoots(roots: string[], providers: Provider[]): { findings: Finding[]; filesScanned: number } {
+  const findings: Finding[] = [];
+  const seen = new Set<string>();
+  let filesScanned = 0;
+  for (const root of roots) {
+    const scan = scanEnvFiles(root, providers);
+    filesScanned += scan.filesScanned;
+    for (const f of scan.findings) {
+      const line = [f.project.toLowerCase(), f.file, f.envVar, f.fingerprint].join("\0");
+      if (seen.has(line)) continue;
+      seen.add(line);
+      findings.push(f);
+    }
+  }
+  return { findings, filesScanned };
+}
+
 export async function importKeys(opts: { root?: string; dryRun?: boolean } = {}): Promise<ImportReport> {
-  const root = opts.root ?? projectsRoot();
-  if (!existsSync(root)) throw new UserError(`no such folder: ${root}`);
+  const roots = opts.root ? [opts.root] : projectRoots().filter((r) => existsSync(r));
+  if (opts.root && !existsSync(opts.root)) throw new UserError(`no such folder: ${opts.root}`);
+  if (roots.length === 0) throw new UserError(`no projects root found (${projectRoots().join(", ")})`);
   const apply = (v: Vault, scan: { findings: Finding[]; filesScanned: number }): ImportReport => {
     const report: ImportReport = { filesScanned: scan.filesScanned, found: scan.findings.length, imported: [], known: 0, conflicts: [], reuse: [] };
     for (const f of scan.findings) {
@@ -475,7 +519,7 @@ export async function importKeys(opts: { root?: string; dryRun?: boolean } = {})
       }
       if (current) {
         if (report.conflicts.some((c) => c.project === f.project && c.providerId === f.providerId && c.fingerprint === f.fingerprint)) continue;
-        report.conflicts.push({ project: f.project, providerId: f.providerId, fingerprint: f.fingerprint, file: f.file, envVar: f.envVar, kept: current.id });
+        report.conflicts.push({ project: f.project, dir: f.dir, providerId: f.providerId, fingerprint: f.fingerprint, file: f.file, envVar: f.envVar, kept: current.id });
         continue;
       }
       const provider = providerById(v, f.providerId);
@@ -499,9 +543,9 @@ export async function importKeys(opts: { root?: string; dryRun?: boolean } = {})
   };
   if (opts.dryRun) {
     const v = readVault();
-    return apply(v, scanEnvFiles(root, v.providers));
+    return apply(v, scanRoots(roots, v.providers));
   }
-  return mutate((v) => apply(v, scanEnvFiles(root, v.providers)));
+  return mutate((v) => apply(v, scanRoots(roots, v.providers)));
 }
 
 export { ProviderError, UserError };

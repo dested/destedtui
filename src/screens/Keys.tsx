@@ -277,9 +277,11 @@ export function Keys({ cwd, back, rotate: rotateStart }: Props) {
     if (k.project === "shared") return say("✗ shared keys have no project folder to write into", T.red);
     work(`writing ${k.project}/.env`, async () => {
       const res = await writeEnv(k.project, false);
-      const changed = res.plans.flatMap((p) => p.changes.filter((c) => c.change !== "same").map((c) => `${c.change} ${c.envVar}`));
+      const changed = [...new Set(res.plans.flatMap((p) => p.changes.filter((c) => c.change !== "same").map((c) => `${c.change} ${c.envVar}`)))];
+      const copies = new Set(res.ignore.map((i) => i.dir)).size;
+      const where = copies > 1 ? ` (${copies} copies)` : "";
       const tracked = res.ignore.some((i) => i.tracked) ? " · ⚠ that .env is COMMITTED to git" : "";
-      return `${changed.length ? `✓ ${res.project}: ${changed.join(", ")}` : `✓ ${res.project}: .env already up to date`}${tracked}`;
+      return `${changed.length ? `✓ ${res.project}${where}: ${changed.join(", ")}` : `✓ ${res.project}${where}: .env already up to date`}${tracked}`;
     });
   };
 

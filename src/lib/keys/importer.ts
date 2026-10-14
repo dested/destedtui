@@ -10,6 +10,8 @@ import { fingerprint, type Provider } from "./vault.ts";
 
 export interface Finding {
   project: string;
+  /** The project folder this came from (one copy of it, when it lives under two roots). */
+  dir: string;
   /** Path inside the project, forward slashes (".env", "web/.env.local"). */
   file: string;
   envVar: string;
@@ -107,6 +109,7 @@ export function scanEnvFiles(root: string, providers: Provider[]): { findings: F
         if (!provider) continue;
         findings.push({
           project,
+          dir,
           file: relative(dir, file).replace(/\\/g, "/"),
           envVar,
           providerId: provider.id,

@@ -73,8 +73,9 @@ export async function launch(entry) {
 
 /**
  * WSL: hand a bin over to its Windows build (the key vault is Windows DPAPI:
- * one vault, no Linux copy). Same argv, inherited stdio, and the projects root
- * passed as `W:\code` through WSLENV so `--project` and the cwd resolve there.
+ * one vault, no Linux copy). Same argv and inherited stdio. No projects root
+ * goes across: keys.exe looks under W:\code and G:\code itself and folds the
+ * `\\wsl.localhost\sal\w\…` cwd to W:\. DESTEDTUI_WIN_PROJECTS_ROOT pins one.
  * @param {string} name  the bun-linked Windows bin (`keys` → keys.exe)
  */
 export async function forwardToWindows(name) {
@@ -85,10 +86,9 @@ export async function forwardToWindows(name) {
     console.error(`${name}: the Windows build isn't installed (${exe}) — run bun link in G:\\code\\destedtui`);
     process.exit(1);
   }
-  const env = {
-    ...process.env,
-    DESTEDTUI_PROJECTS_ROOT: process.env.DESTEDTUI_WIN_PROJECTS_ROOT || "W:\\code",
-    WSLENV: [process.env.WSLENV, "DESTEDTUI_PROJECTS_ROOT"].filter(Boolean).join(":"),
-  };
+  const pinned = process.env.DESTEDTUI_WIN_PROJECTS_ROOT;
+  const env = pinned
+    ? { ...process.env, DESTEDTUI_PROJECTS_ROOT: pinned, WSLENV: [process.env.WSLENV, "DESTEDTUI_PROJECTS_ROOT"].filter(Boolean).join(":") }
+    : process.env;
   process.exit(await run(exe, process.argv.slice(2), env));
 }

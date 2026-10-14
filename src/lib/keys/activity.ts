@@ -1,10 +1,14 @@
 // Is a project alive? Last time Sal typed a prompt in it (~/.claude/history.jsonl,
-// the same source sal-agent's projectIndex reads) or committed to it (git log).
+// the same source sal-agent's projectIndex reads; on Windows the WSL distro's
+// too) or committed to it (git log), in any copy of it (W:\code, G:\code).
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, relative, sep } from "node:path";
-import { projectsRoot } from "../projects.ts";
+import { join } from "node:path";
+import { IS_WIN, linuxToWin, wslHome } from "../platform.ts";
+import { projectRoots } from "../projects.ts";
+import { gitCommand } from "./envfile.ts";
+import { projectFromCwd, resolveProject } from "./ops.ts";
 
 export const ACTIVE_DAYS = 30;
 const DAY = 86_400_000;
@@ -22,9 +26,9 @@ let promptCache: { at: number; map: Map<string, number> } | null = null;
 function lastPrompts(): Map<string, number> {
   if (promptCache && Date.now() - promptCache.at < 60_000) return promptCache.map;
   const map = new Map<string, number>();
-  const file = join(homedir(), ".claude", "history.jsonl");
-  const root = projectsRoot();
-  if (existsSync(file)) {
+  const roots = projectRoots();
+  for (const file of historyFiles()) {
+    if (!existsSync(file)) continue;
     const text = readFileSync(file, "utf8");
     for (const line of text.split("\n")) {
       const ts = /"timestamp":(\d+)/.exec(line);
@@ -36,9 +40,8 @@ function lastPrompts(): Map<string, number> {
       } catch {
         continue;
       }
-      const rel = relative(root, cwd);
-      if (!rel || rel.startsWith("..") || /^[a-zA-Z]:/.test(rel)) continue;
-      const folder = rel.split(sep)[0]?.toLowerCase();
+      // The distro's history holds Linux paths (/w/code/x); keys runs on Windows.
+      const folder = projectFromCwd(IS_WIN && cwd.startsWith("/") ? linuxToWin(cwd) : cwd, roots)?.toLowerCase();
       if (!folder) continue;
       const at = Number(ts[1]);
       if (at > (map.get(folder) ?? 0)) map.set(folder, at);
@@ -46,6 +49,12 @@ function lastPrompts(): Map<string, number> {
   }
   promptCache = { at: Date.now(), map };
   return map;
+}
+
+/** Claude's prompt history on this side, and on Windows the WSL distro's (sessions in /w/code). */
+function historyFiles(): string[] {
+  const own = join(homedir(), ".claude", "history.jsonl");
+  return IS_WIN ? [own, join(wslHome(), ".claude", "history.jsonl")] : [own];
 }
 
 /**
@@ -62,14 +71,21 @@ function lastCommit(dir: string): number | null {
       if (m?.[1]) return Number(m[1]) * 1000;
     }
   }
-  const r = Bun.spawnSync(["git", "-C", dir, "log", "-1", "--format=%ct"], { stdout: "pipe", stderr: "ignore" });
+  const { cmd, cwd } = gitCommand(dir, ["log", "-1", "--format=%ct"]);
+  const r = Bun.spawnSync(cmd, { cwd, stdout: "pipe", stderr: "ignore" });
   const s = Number.parseInt(r.stdout.toString().trim(), 10);
   return Number.isFinite(s) ? s * 1000 : null;
 }
 
 export function activityOf(project: string, now = Date.now()): Activity {
   const prompt = lastPrompts().get(project.toLowerCase()) ?? null;
-  const commit = lastCommit(join(projectsRoot(), project));
+  let dirs: string[] = [];
+  try {
+    dirs = resolveProject(project).dirs;
+  } catch {
+    /* folder gone: prompts only */
+  }
+  const commit = Math.max(0, ...dirs.map((d) => lastCommit(d) ?? 0)) || null;
   const lastAt = Math.max(prompt ?? 0, commit ?? 0) || null;
   const source = lastAt === null ? null : prompt !== null && prompt >= (commit ?? 0) ? "claude" : "git";
   return { lastAt, source, active: lastAt !== null && now - lastAt < ACTIVE_DAYS * DAY };

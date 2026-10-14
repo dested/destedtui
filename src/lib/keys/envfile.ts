@@ -89,15 +89,22 @@ export function removeFromEnv(file: string, envVar: string, onlyIfValue: string)
 }
 
 /**
- * Exit code of a git query in `cwd`. A folder that lives in the WSL distro
- * (`W:\…`) is asked through Linux git: Windows git never touches those repos
- * (slow over 9P, and it sees the wrong modes and ownership).
+ * The argv (and cwd) for a git command in `dir`. A folder that lives in the WSL
+ * distro (`W:\…`) is asked through Linux git: Windows git never touches those
+ * repos (slow over 9P, and it sees the wrong modes and ownership).
  */
+export function gitCommand(dir: string, args: string[]): { cmd: string[]; cwd: string | undefined } {
+  const linuxDir = IS_WIN ? winToLinux(dir) : null;
+  return linuxDir
+    ? { cmd: ["wsl.exe", "-d", WSL_DISTRO, "--exec", "/usr/bin/git", "-C", linuxDir, ...args], cwd: undefined }
+    : { cmd: ["git", ...args], cwd: dir };
+}
+
+/** Exit code of a git query in `cwd`. */
 function git(cwd: string, args: string[]): number {
-  const linuxDir = IS_WIN ? winToLinux(cwd) : null;
-  const cmd = linuxDir ? ["wsl.exe", "-d", WSL_DISTRO, "--exec", "/usr/bin/git", "-C", linuxDir, ...args] : ["git", ...args];
+  const { cmd, cwd: at } = gitCommand(cwd, args);
   try {
-    return Bun.spawnSync(cmd, { cwd: linuxDir ? undefined : cwd, stdout: "ignore", stderr: "ignore" }).exitCode ?? 1;
+    return Bun.spawnSync(cmd, { cwd: at, stdout: "ignore", stderr: "ignore" }).exitCode ?? 1;
   } catch {
     return 1;
   }

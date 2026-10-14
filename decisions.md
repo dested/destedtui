@@ -2,6 +2,10 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-14 — keys searches W:\code and G:\code; a project in both gets both .env files written
+Supersedes the "root crosses as `W:\code`" part of 2026-10-13. keys has one projects-root list on Windows, `W:\code` then `G:\code`, whichever side launched it. A slug in both roots is one project with two copies. Every `.env` write, revoke and rotate retire goes to each copy, so whichever copy Sal runs works and no revoked value lingers in the other. (Sal picked this, 2026-10-14.) The bridge stops pinning the root, since pinning hid every G:-only project from WSL. startup/bx still get `W:\code` pinned (unchanged).
+**Rejected:** W: wins (a rotate leaves the G: copy on a dead key), cwd decides (the vault doesn't record which copy it wrote, so revoke could miss one), a list env var just for keys (`DESTEDTUI_PROJECTS_ROOT` takes a `path.delimiter` list instead).
+
 ## 2026-10-13 — WSL port: one codebase per platform, sidecar kept, keys bridged to the Windows vault
 The wsl-move run's brief (lead, for Sal) set the shape: destedtui runs natively in the `sal` distro, branching on `process.platform`, with `*.linux.ts` siblings for OS-heavy modules. Windows behaviour is unchanged.
 - **term keeps the Node pty sidecar on Linux.** Bun could drive a Linux PTY itself, but one code path beats two; the sidecar's PID watchdog and a SIGHUP → SIGKILL walk of each pane's session give the same zero-orphan guarantee (verified: graceful quit and `kill -9` of the TUI).
