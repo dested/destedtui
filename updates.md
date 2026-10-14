@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-13 — runs natively in the `sal` WSL distro (wsl-move run, tui-wsl)
+Asked: port everything that can run on Linux; keys bridged to the Windows vault; startup/bx Windows-only; Windows unchanged. Done: `platform.ts` + `/proc` scanner (`ports.linux.ts`, `proc.linux.ts`) behind the ports `OsLayer`; POSIX tree kill; root `/w/code` and a seeded Linux config; zsh panes in term (sidecar kept); pg tools from `/usr/lib/postgresql`; review and usage with Linux claude; keys forwards to `keys.exe`; startup/bx/keys tiles hand over to the Windows bins; `shell/destedtui.zsh` + `--install-shell` into `~/.zshrc.local`. tsc green both sides; Windows regression (ports json, usage, review dry-run, keys list, picker snap) and Linux checks (snaps, 7795 server, usage, review, pg backup/restore, zsh handoff + autostart guard, keys TUI, term kill -9, idle pause) all pass, zero orphans.
+Touched: bin/{launch,keys}.mjs, ptyhost/host.mjs, shell/destedtui.zsh, src/lib/{platform,winforward,installShell,proc.linux,ports.linux,ports,ports-json,procs,proctext,run,term,ptyhost,pgtools,review,config,projects,idle}.ts, src/lib/keys/{ops,envfile}.ts, src/lib/claude/view.ts, src/{index,App}.tsx, src/screens/{MainMenu,Projects,Ports,Term}.tsx, scripts/snap-claude.tsx, .gitattributes
+
 ## 2026-10-10 — startup: iris, .NET sal-widgets, opt-in auto-start
 Asked: put sal-widgets in startup, don't start anything by default, and launch Iris from here. Done: sal-widgets runs `dotnet run --project src/SalWidgets -c Release` (the v2 rewrite). A new `iris` card runs sal-agent's `bun run app`; sal-agent stopped registering it at login. Opening the dashboard starts only the apps whose `◉ auto` is on (button or `t`, persisted as `startupAuto` in `~/.destedtui/config.json`, empty by default). tsc green; not launched in-session.
 Touched: src/lib/startup.ts, src/screens/Startup.tsx, cliffnotes.md

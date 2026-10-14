@@ -16,6 +16,21 @@
 
 No unit-test runner. Core-logic smoke and full e2e are ad-hoc scripts (patterns below).
 
+### Linux / WSL [cheap]
+Touchpoints: `src/lib/platform.ts`, every `*.linux.ts`, `lib/winforward.ts`, `shell/destedtui.zsh`, `bin/launch.mjs`
+Test in a copy, never `/w/code/destedtui`: `rsync -a --delete --exclude .git --exclude node_modules /mnt/g/code/destedtui/ <scratch>/destedtui/`, `bun install --frozen-lockfile` there once. From Git Bash, `export MSYS_NO_PATHCONV=1` and run each step as `wsl.exe -d sal --cd <scratch>/destedtui --exec /bin/bash -c '…'`. Before and after each step, `pgrep -af "bun|node"` must match.
+1. `bun x tsc --noEmit` → 0.
+2. A throwaway server in tmux (`bun server.ts` on 7795, `tmux -L <sock>`) → `bun src/index.tsx --ports --json` shows `platform:"linux"` and the server with cwd, title, `http:true`.
+3. Headless frames: `bun scripts/snap-claude.tsx --route projects|menu|ports|procs|term`. projects lists `/w/code`; menu shows Startup / bx / Keys badged `windows`.
+4. `--usage --days 1` (a cold scan of the Linux transcripts takes ~60s) and `bun src/review.tsx --headless --dry-run` → exit 0.
+5. pg: create a throwaway DB on localhost, back it up and restore it through `startBackup`/`startRestore` (tools from `/usr/lib/postgresql/<major>/bin`), compare row counts, drop both.
+6. zsh: a stub `destedtui` that writes `<dir>\n<cmd>` into `DESTEDTUI_CD_FILE`, `ZDOTDIR` pointing at a scratch `.zshrc` that sources the installed `~/.zshrc.local` block (made with `HOME=<scratch> bun src/index.tsx --install-shell`) → `zsh -ic proj` lands in `<dir>` and ran `<cmd>`; under `script -qec "zsh -i"` the autostart fires only in the root with a clean env (not with `DESTEDTUI_NO_AUTOSTART`, `SAL_RUN`, another cwd, `-ic`, or stdin off a tty).
+7. Real TUI in tmux with `DESTEDTUI_PROJECTS_ROOT=<scratch root>`: autostart → type a name → `ctrl+d` runs its dev script in that folder. `destedtui` → Keys tile → `keys.exe` renders (fingerprints only) → `q q` → back on the menu, keys still work. `--startup` / `--bx` print the Windows-only line, exit 1.
+8. term: `--term`, `ctrl+b n` twice, `kill -9` the bun pid → sidecar and both zsh gone within a second.
+9. keys bridge: `keys list` and `keys env --dry-run` from `/w/code/<project>` (names + fingerprints only; never print a value).
+10. Idle pause: `DESTEDTUI_IDLE_MS=4000 destedtui --procs` → paused panel → a key resumes → `q` on the paused panel exits 0; `--projects` prints "closed after a minute idle".
+Not run: `--startup`/`--bx` tiles from WSL (they'd boot real Windows servers / attach to live bx daemons; same code path as the Keys tile), and the apt install of a missing pg major.
+
 ### Idle pause [cheap]
 Touchpoints: `bin/launch.mjs`, `bin/paused.mjs`, `src/lib/idle.ts`, the pause effect in `src/App.tsx`
 In tmux, in pwsh, with `$env:DESTEDTUI_IDLE_MS=4000`:

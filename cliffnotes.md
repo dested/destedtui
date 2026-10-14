@@ -1,7 +1,7 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-10-10.
+> Last updated: 2026-10-13.
 
 ## What this is
 
@@ -12,14 +12,22 @@ Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that li
 - **Run:** `bun run dev` in this repo, or `destedtui` anywhere (globally linked via `bun link`)
 - **Entry point:** global bin `bin/destedtui.mjs` (Node launcher) → `bun src/index.tsx` → arg parsing → `bootTui` (`src/tui.tsx`) → `<App/>`. `bun run dev` skips the launcher (no idle pause)
 - **Idle pause:** every bin's TUI (`destedtui`, `keys`, `review`) runs as a child of `bin/launch.mjs`. After 60s with no input and nothing live, the child saves its screen stack and exits, so all its memory goes back to Windows. `bin/paused.mjs` then shows "paused, click to resume", and a click starts a fresh child on the same screens. The shell-launched picker just exits to the prompt instead. `DESTEDTUI_IDLE_MS` overrides the timeout (0 = off)
-- **Type-check:** `bun x tsc --noEmit`
+- **Platforms:** Windows (native) and Linux in the `sal` WSL distro, one codebase branching on `process.platform` (`lib/platform.ts`: `IS_WIN`/`IS_LINUX`, `isWsl()`, `winHome()`, `winBin()`, and the `W:\x` ↔ `/w/x` / `\\wsl.localhost\sal\x` ↔ `/x` path rules). Modules that are mostly OS calls have a `*.linux.ts` sibling behind the same API (`lib/ports.linux.ts`, `lib/proc.linux.ts`). Linux differences:
+  - projects root `/w/code`; config `/home/dested/.destedtui/config.json`, its own file, seeded once (`commands`, `localhost`, `projectOpens` re-keyed to `/w/code/<name>`) from `/mnt/c/Users/dested/.destedtui/config.json`
+  - ports/procs read `/proc` (`/proc/net/tcp{,6}` + fd inodes); kill = SIGTERM to the process group/session/descendants, then SIGKILL after 2s from a detached `sh` reaper (`posixTreeKill`); scripts run `/bin/sh -c` in their own session (`detached`)
+  - term keeps the Node sidecar; panes are `zsh -l -i` (claude pane `zsh -lic "<claude>; exec zsh"`) with `DESTEDTUI_NO_AUTOSTART=1` and `SAL_NO_PICK=1`
+  - pg tools from `/usr/lib/postgresql/<major>/bin`, `sudo -n apt-get install -y postgresql-client-<major>` when missing
+  - **keys** is a bridge: the Linux `keys` bin execs `/mnt/c/Users/dested/.bun/bin/keys.exe` (`forwardToWindows` in `bin/launch.mjs`) with `DESTEDTUI_PROJECTS_ROOT=W:\code` through `WSLENV`; the Windows side folds a `\\wsl.localhost\sal\w\…` cwd to `W:\…` and asks Linux git (`wsl.exe -d sal --exec /usr/bin/git -C /w/…`) about `.gitignore` for anything under `W:\`
+  - **startup / bx / keys tiles** suspend the renderer and run `destedtui.exe --startup|--bx` / `keys.exe` with the terminal (`lib/winforward.ts`), resuming when it exits; `--startup`/`--bx` on the CLI exit 1 with a pointer to `destedtui.exe`
+  - Chrome is the Windows one through interop; ports' copy-url uses `clip.exe`
+- **Type-check:** `bun x tsc --noEmit` (run it in the Linux copy too)
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
 - **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--procs`, `--bx` (+ `--log`), `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys`, `--claude` (jump straight to a screen), `--usage` (print Claude usage, `--days`/`--project`/`--json`), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
 - **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set`/`usage`/`push`/`drydock`/`rotate --dry-run` for Claude sessions (the `keys` skill, source `skill/keys/`). `reveal`/`copy` for a value (never printed inside Claude Code); values never on argv. Exit 0 ok / 1 user error / 2 provider API error
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
-- **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff)
-- **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. Windows-only. `--ports --json` prints one scan with page titles as versioned JSON (`lib/ports-json.ts`), read by sal-agent's https://sal.localhost/ports; add fields, never rename them
+- **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff). **zsh (WSL):** `--install-shell` writes a `# >>> destedtui >>>` block into `~/.zshrc.local` (never `~/.zshrc`, a symlink into sals-powershell-setup) that sources `shell/destedtui.zsh`: `proj`/`pj`, `dested`, `term`, `ports`, `procs` (shared `_destedtui_cd` handoff) and autostart only for an interactive tty zsh started exactly in the projects root with `DESTEDTUI_NO_AUTOSTART`, `SAL_RUN`, `CLAUDECODE`, `CI` unset and no `-c` command
+- **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. On Linux the same `OsLayer` reads `/proc` (`lib/ports.linux.ts`, ~15ms). `--ports --json` prints one scan with page titles as versioned JSON (`lib/ports-json.ts`), read by sal-agent's https://sal.localhost/ports; add fields, never rename them (top-level `platform` says which side scanned)
 - **Claude procs (`procs`, `--procs`):** what every Claude Code session spun up — one group per CLI `claude.exe` (its tool shells, servers, watchers), orphan groups per project (parent gone), dev work outside Claude. Live CPU (% of one core, smoothed), memory, ports, flags (hot, ×N dupes, daemon, mcp, bg = nohup'd from that session's scratchpad); two-press kill per unit, per group, or every orphan leftover (no port, not a daemon). `lib/procs.ts` on top of `processTable()` in `lib/ports.ts`. See [features/procs.md](features/procs.md)
 - **bx daemons (`bxtop`, `--bx`, `--bx --log`):** every bx browser daemon (G:\code\bx): state (in flight / recording / idle / old), who drives it (status-card label via the `x-bx-client` header), node + Chrome memory with trend and growth/min, per-tab heap/DOM/listeners, command journal, process tree, log tail; orphan daemons/Chromes/run files; two-press stop/kill, gc, heap snapshot, memlog to `~/.destedtui/bx-memlog/`. Reads each daemon's `GET /debug`. Its `⛁ profiles` button opens **bx profiles**: every `~/.bx/profiles` folder's size and last use (sized in a Worker), per-row delete, bulk prune of the unused ones (never `default` or in use). See [features/bx.md](features/bx.md)
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
@@ -57,8 +65,9 @@ ptyhost/
 shell/
   destedtui.ps1         `proj`/`pj` + `ports` (shared `Invoke-DestedTuiCd` temp-file cd handoff) + autostart guard + `dested` alias + `term` / `procs` / `bxtop` fns
   install.ps1           idempotent marked block into the real $PROFILE (-Uninstall removes it)
+  destedtui.zsh         the zsh twin for WSL: `proj`/`pj`/`ports`/`procs` (`_destedtui_cd`), `dested`, `term`, `_destedtui_autostart` (LF-only: .gitattributes)
 src/
-  index.tsx             CLI entry: --help/--version/--projects/--backup/--restore/--local/--pull/--review/--install-shell
+  index.tsx             CLI entry: --help/--version/--projects/--backup/--restore/--local/--pull/--review/--install-shell (Linux: zsh installer; --startup/--bx refused, --keys forwarded)
   review.tsx            the `review` bin: scope flags, --headless path, or boots the TUI on the review route
   keys.tsx              the `keys` bin: the vault CLI, or boots the TUI on the keys route
   tui.tsx               bootTui: createCliRenderer + <App/>; reads the resume stack when the launcher resumes us
@@ -99,7 +108,12 @@ src/
     KeysRotate.tsx      the rotate screen (`R`): shared keys → overview/plan → confirmed walk → revoke; dead-key batch (`d`); --simulate
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all, opt-in auto-start: config `startupAuto`)
-    ports.ts            localhost scanner via bun:ffi: iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd (+ CPU time); kill-root chain walk, HTTP <title> probe, killServer; processTable() = every process for procs
+    platform.ts         Windows ↔ WSL: IS_WIN/IS_LINUX, isWsl, winHome, winBin, normalizeWslUnc (`\\wsl.localhost\sal\w\x` → `W:\x`), winToLinux (`W:\x` → `/w/x`)
+    winforward.ts       Linux build: windowsTarget(route) (startup/bx/bxProfiles/keys → a Windows bin), windowsUnavailable, runWindowsBin (terminal handed over, root as W:\code via WSLENV), forwarding() for the idle pause
+    installShell.ts     Linux `--install-shell`: the marked block in ~/.zshrc.local (`--uninstall` removes it)
+    proc.linux.ts       /proc readers (stat, cmdline, cwd/exe links, statm), treeOf, posixTreeKill (SIGTERM now, detached sh reaper SIGKILLs after 2s)
+    ports.linux.ts      linuxLayer: the ports/procs OsLayer over /proc/net/tcp{,6} + fd socket inodes; details cached per pid:starttime
+    ports.ts            localhost scanner via bun:ffi (Windows; `layer()` picks linuxLayer elsewhere): iphlpapi listener table, Toolhelp process tree, PEB read for cmdline+cwd (+ CPU time); kill-root chain walk, HTTP <title> probe, killServer; processTable() = every process for procs
     procs.ts            claude procs: ProcSampler (cpu rates between scans), session metadata (~/.claude/sessions, ~/.sal/status cards), units/groups/flags, killRoots (one batched taskkill), leftoverUnits
     bx.ts               bx monitor data: run files + /debug (zod mirror of bx's protocol), BxSampler (tree per daemon, orphans, 30-min Series history, slope, memlog), driversOf, stop/kill/gc/heapSnapshot, log tail
     bxProfiles.ts       bx profile folders: sizeProfile (walk + top-level breakdown + last used), deleteProfile (refuses a live run file; every rm goes through profileDir), the worker's zod message contract, the screen's cache + profilesTotal
@@ -199,8 +213,12 @@ src/
 | Ignoring `cd `/paths typed into the filter | `src/lib/projects.ts` → `parseQuery`, `NAV_PREFIX` |
 | The picker's cd handoff | `src/lib/cd.ts` + `chooseProject` in `App.tsx` + `proj` in `shell/destedtui.ps1` |
 | What the card buttons run | `detectStack` → `devCommand` in `lib/projects.ts`; `CLAUDE_COMMAND` in `ProjectCard.tsx` |
-| When the picker auto-opens | `Test-DestedTuiAutostart` in `shell/destedtui.ps1` |
-| Projects root (default `g:\code`) | `projectsRoot()` — `DESTEDTUI_PROJECTS_ROOT` > config `projectsRoot` > platform default |
+| When the picker auto-opens | `Test-DestedTuiAutostart` in `shell/destedtui.ps1`; `_destedtui_autostart` in `shell/destedtui.zsh` |
+| Projects root (default `g:\code`, `/w/code` on Linux) | `projectsRoot()` — `DESTEDTUI_PROJECTS_ROOT` > config `projectsRoot` > platform default |
+| Anything that differs between Windows and WSL | `src/lib/platform.ts` first; then the `*.linux.ts` siblings; grep `IS_WIN` for the rest |
+| A Windows-only screen opened from WSL | `windowsTarget` in `src/lib/winforward.ts` (+ `go` in `App.tsx`, `WINDOWS_TILES` in `MainMenu.tsx`, `WINDOWS_ACTIONS` in `Projects.tsx`) |
+| Linux config seeding from Windows | `seedFromWindows` in `src/lib/config.ts` |
+| keys from WSL | `forwardToWindows` in `bin/launch.mjs` (bin side), `projectFromCwd` in `lib/keys/ops.ts` + `git()` in `lib/keys/envfile.ts` (Windows side) |
 | Colors / look | `src/theme.ts` (+ `ui.md`) |
 | What gets discovered in a project | `src/lib/discovery.ts` (SKIP_DIRS, DB_URL_KEYS, maxDepth=4) |
 | Supported pg versions / download URLs | `src/lib/pgtools.ts` → `EDB_CANDIDATES`, `MAJOR_ORDER` |
@@ -283,6 +301,10 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Bun's floor on Windows is ~340 MB of private commit for an empty script; Node's is ~15 MB.** That's why the launcher and the paused screen (`bin/*.mjs`) are Node. Don't port them to Bun or import TS into them: a paused terminal must cost ~35 MB, not ~800.
 - **A bin's shebang is its runtime.** `bun link` writes the shebang's program into `~/.bun/bin/<bin>.bunx`. If you change a bin's path or shebang, re-run `bun link`, or the old shim keeps launching the old file.
 - **Anything a pause would destroy must hold the TUI awake.** Either add its route to `busyRoute` in `lib/idle.ts` or spawn it through `lib/run.ts` (live children count). Term panes and startup dev servers are already covered.
+- **WSL: Windows git never touches a `W:\` / `\\wsl.localhost` repo, and Linux git never a `/mnt/g` one** (9P is slow and the modes/ownership read wrong). Cross over with `wsl.exe -d sal --exec /usr/bin/git -C /w/…` (`git()` in `lib/keys/envfile.ts`).
+- **POSIX kill from an exit handler needs the detached reaper.** A `setTimeout` SIGKILL never fires once the TUI exits, so `posixTreeKill` SIGTERMs now and leaves a detached `/bin/sh -c "sleep 2; kill -9 …"`. Scripts must spawn `detached` (setsid) or a group kill takes the TUI's own group with it.
+- **Linux claude is a version-named binary** (`~/.local/share/claude/versions/<ver>`, via `~/.local/bin/claude`), so an exe basename like `2.1.296` falls back to `comm` (`claude`). It's not on PATH in `zsh -lc` (only the interactive zshrc adds it): `claudeExe()` in `lib/review.ts` falls back to `~/.local/bin/claude`.
+- **Driving `wsl.exe` from Git Bash: `export MSYS_NO_PATHCONV=1`**, and never put a `\\` inside a Bash heredoc that writes source (it arrives as one `\`). Write backslash strings with the Edit tool.
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 
 ## Status
@@ -296,5 +318,6 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Done** [Claude usage](features/claude-usage.md) — per-project cost/tokens/sessions/active time, project × day heatmap, sessions with resume, day log; `--claude`, `--usage`, menu tile, "claude" in picker. Pricing checked against Claude Code's own `cost-state` (single-model sessions match to the cent). Frames verified headless at 180×46/120×30/100×30.
 - **Done** [bx daemons](features/bx.md) — live monitor of every bx daemon over its `/debug` endpoint; `--bx`, `bxtop`, menu tile. Frames verified headless at 200×48/200×40/200×30/140×24/100×30; stop, orphan kill, gc and heap snapshot exercised against live daemons.
 - **Done** Idle pause (2026-10-10): launcher, paused screen and resume, ~35 MB while paused. Verified in tmux: pause → click resume → pause → `q` quits (exit 0, nothing left over); the picker exits quietly; review and an open term pane never pause.
+- **Done** WSL (2026-10-13): everything but startup/bx runs natively in the `sal` distro; keys bridges to `keys.exe`; startup/bx tiles hand over to `destedtui.exe`. Verified per `verify.md` § Linux / WSL. Not wired into the real zshrc yet (the lead does that at publish).
 - **Not built** (menu shows "coming soon"): Git dashboard, .env inspector, node_modules nuker
 - **Next:** whichever coming-soon tile the user picks

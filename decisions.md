@@ -2,6 +2,17 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-13 — WSL port: one codebase per platform, sidecar kept, keys bridged to the Windows vault
+The wsl-move run's brief (lead, for Sal) set the shape: destedtui runs natively in the `sal` distro, branching on `process.platform`, with `*.linux.ts` siblings for OS-heavy modules. Windows behaviour is unchanged.
+- **term keeps the Node pty sidecar on Linux.** Bun could drive a Linux PTY itself, but one code path beats two; the sidecar's PID watchdog and a SIGHUP → SIGKILL walk of each pane's session give the same zero-orphan guarantee (verified: graceful quit and `kill -9` of the TUI).
+- **keys stays one Windows DPAPI vault.** The Linux `keys` bin and the Keys tile run `keys.exe` through interop (its TUI renders fine in a WSL terminal); the root crosses as `W:\code` via `WSLENV`. The Windows side normalises a `\\wsl.localhost\sal\w\…` cwd and uses Linux git for repos under `W:\`.
+- **startup and bx stay Windows-only.** Their tiles hand the terminal to `destedtui.exe --startup|--bx` and resume after; the CLI flags exit 1 with a pointer, per the brief.
+- Mine: kill on Linux is SIGTERM to the group/session/descendants plus a detached `sh` reaper for the SIGKILL, because a timer can't outlive the exiting TUI. The `--ports --json` schema only gains a `platform` field.
+**Rejected:**
+- A Linux key vault (two vaults drift; the brief says one).
+- Moving PTYs into Bun on Linux (two code paths for the riskiest cleanup in the app).
+- Writing the zsh block into `~/.zshrc` (a symlink into sals-powershell-setup); it goes in `~/.zshrc.local`.
+
 ## 2026-10-10 — Idle pause restarts the process, from a Node launcher
 Sal asked for the TUI to live about a minute, then pause and release everything, with a click to resume. Sal picked: 60s with no input (not a hard cap); never pause while busy (term panes, dev servers, a running script/backup/review); the shell's picker just exits instead of showing a resume screen. Mine: the pause is a real process exit. The bins are Node launchers (`bin/launch.mjs`) that run the Bun TUI as a child and respawn it on the saved route stack.
 **Rejected:**
