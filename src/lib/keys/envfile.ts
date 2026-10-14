@@ -4,6 +4,7 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
+import { IS_WIN, WSL_DISTRO, winToLinux } from "../platform.ts";
 
 export type Change = "add" | "update" | "same" | "remove";
 
@@ -87,9 +88,16 @@ export function removeFromEnv(file: string, envVar: string, onlyIfValue: string)
   return true;
 }
 
+/**
+ * Exit code of a git query in `cwd`. A folder that lives in the WSL distro
+ * (`W:\…`) is asked through Linux git: Windows git never touches those repos
+ * (slow over 9P, and it sees the wrong modes and ownership).
+ */
 function git(cwd: string, args: string[]): number {
+  const linuxDir = IS_WIN ? winToLinux(cwd) : null;
+  const cmd = linuxDir ? ["wsl.exe", "-d", WSL_DISTRO, "--exec", "/usr/bin/git", "-C", linuxDir, ...args] : ["git", ...args];
   try {
-    return Bun.spawnSync(["git", ...args], { cwd, stdout: "ignore", stderr: "ignore" }).exitCode ?? 1;
+    return Bun.spawnSync(cmd, { cwd: linuxDir ? undefined : cwd, stdout: "ignore", stderr: "ignore" }).exitCode ?? 1;
   } catch {
     return 1;
   }

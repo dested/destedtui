@@ -14,8 +14,8 @@
 // console in turn. Keep the constants in step with src/lib/pause.ts.
 
 import { spawn } from "node:child_process";
-import { rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, rmSync } from "node:fs";
+import { tmpdir, userInfo } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -69,4 +69,26 @@ export async function launch(entry) {
     }
     resume = true;
   }
+}
+
+/**
+ * WSL: hand a bin over to its Windows build (the key vault is Windows DPAPI:
+ * one vault, no Linux copy). Same argv, inherited stdio, and the projects root
+ * passed as `W:\code` through WSLENV so `--project` and the cwd resolve there.
+ * @param {string} name  the bun-linked Windows bin (`keys` → keys.exe)
+ */
+export async function forwardToWindows(name) {
+  process.on("SIGINT", () => {});
+  const home = process.env.DESTEDTUI_WIN_HOME || `/mnt/c/Users/${userInfo().username}`;
+  const exe = `${home}/.bun/bin/${name}.exe`;
+  if (!existsSync(exe)) {
+    console.error(`${name}: the Windows build isn't installed (${exe}) — run bun link in G:\\code\\destedtui`);
+    process.exit(1);
+  }
+  const env = {
+    ...process.env,
+    DESTEDTUI_PROJECTS_ROOT: process.env.DESTEDTUI_WIN_PROJECTS_ROOT || "W:\\code",
+    WSLENV: [process.env.WSLENV, "DESTEDTUI_PROJECTS_ROOT"].filter(Boolean).join(":"),
+  };
+  process.exit(await run(exe, process.argv.slice(2), env));
 }

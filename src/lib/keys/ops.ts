@@ -3,6 +3,7 @@
 
 import { existsSync, readdirSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
+import { normalizeWslUnc } from "../platform.ts";
 import { projectsRoot } from "../projects.ts";
 import { openInChrome } from "../run.ts";
 import { ADAPTERS, type AdminInput, type MintAdapter } from "./adapters/index.ts";
@@ -55,9 +56,12 @@ export function resolveProject(name: string): ProjectRef {
   return { slug: hit, dir };
 }
 
-/** The project the cwd is inside (first path segment under the projects root), if any. */
+/**
+ * The project the cwd is inside (first path segment under the projects root), if any.
+ * Launched from WSL, a Windows cwd is `\\wsl.localhost\sal\w\…`: that's `W:\…`.
+ */
 export function projectFromCwd(cwd: string): string | undefined {
-  const rel = relative(projectsRoot(), cwd);
+  const rel = relative(projectsRoot(), normalizeWslUnc(cwd));
   if (!rel || rel.startsWith("..") || /^[a-zA-Z]:/.test(rel)) return undefined;
   return rel.split(sep)[0] || undefined;
 }
