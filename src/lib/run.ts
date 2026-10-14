@@ -1,4 +1,7 @@
+import { existsSync } from "node:fs";
 import type { PackageInfo } from "./discovery.ts";
+import { IS_WIN, isWsl } from "./platform.ts";
+import { posixTreeKill } from "./proc.linux.ts";
 
 const ESC = String.fromCharCode(0x1b);
 const ANSI_RE = new RegExp(
@@ -22,6 +25,9 @@ export interface ProcHandle {
 }
 
 const running = new Set<ProcHandle>();
+
+/** Windows Chrome as WSL sees it. */
+const WSL_CHROME = "/mnt/c/Program Files/Google/Chrome/Application/chrome.exe";
 
 /** Kill everything we started — wired to process exit so no orphans survive. */
 export function killAll(): void {
@@ -47,19 +53,16 @@ export function trackProcess(handle: ProcHandle): () => void {
   return () => running.delete(handle);
 }
 
+/**
+ * Kill a process and everything under it. Windows: `taskkill /T /F`. POSIX:
+ * SIGTERM to its process group and every descendant, SIGKILL 2s later
+ * (`posixTreeKill`). Children we start are their own group (`detached`).
+ */
 export function treeKill(pid: number): void {
-  if (process.platform === "win32") {
+  if (IS_WIN) {
     Bun.spawnSync(["taskkill", "/pid", String(pid), "/T", "/F"], { stdout: "ignore", stderr: "ignore" });
   } else {
-    try {
-      process.kill(-pid, "SIGTERM");
-    } catch {
-      try {
-        process.kill(pid, "SIGTERM");
-      } catch {
-        /* gone */
-      }
-    }
+    posixTreeKill(pid);
   }
 }
 
@@ -93,14 +96,15 @@ export function runScript(pkg: PackageInfo, scriptName: string, onLine: (line: O
  * the engine behind the startup dashboard's long-lived dev servers.
  */
 export function runCommand(command: string, cwd: string, onLine: (line: OutputLine) => void): ProcHandle {
-  const cmd =
-    process.platform === "win32" ? ["cmd.exe", "/d", "/s", "/c", command] : ["sh", "-c", command];
+  const cmd = IS_WIN ? ["cmd.exe", "/d", "/s", "/c", command] : ["/bin/sh", "-c", command];
   const proc = Bun.spawn(cmd, {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
     stdin: "ignore",
     env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" },
+    // POSIX: its own process group, so a kill takes the whole command with it.
+    detached: !IS_WIN,
   });
   const stdoutDone = pumpLines(proc.stdout, "stdout", onLine);
   const stderrDone = pumpLines(proc.stderr, "stderr", onLine);
@@ -142,6 +146,7 @@ export function runTool(
     stderr: "pipe",
     stdin: "ignore",
     env: { ...process.env, ...env },
+    detached: !IS_WIN,
   });
   const tail: string[] = [];
   const stderrDone = pumpLines(proc.stderr, "stderr", (line) => {
@@ -176,16 +181,19 @@ export function runTool(
  * Open a URL in Chrome (fire-and-forget, never tracked — we don't want to kill
  * the browser when the tui exits). `start chrome` resolves via Windows' App
  * Paths registry; the empty "" is the mandatory window-title arg to `start`.
+ * In WSL it's the same Windows Chrome, through interop.
  */
 export function openInChrome(url: string): void {
-  const cmd =
-    process.platform === "win32"
-      ? ["cmd.exe", "/d", "/s", "/c", "start", "", "chrome", url]
-      : process.platform === "darwin"
-        ? ["open", "-a", "Google Chrome", url]
+  const cmd = IS_WIN
+    ? ["cmd.exe", "/d", "/s", "/c", "start", "", "chrome", url]
+    : process.platform === "darwin"
+      ? ["open", "-a", "Google Chrome", url]
+      : isWsl() && existsSync(WSL_CHROME)
+        ? [WSL_CHROME, url]
         : ["google-chrome", url];
   try {
-    Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore", stdin: "ignore" });
+    // Detached on POSIX: the interop relay for a fresh Chrome lives as long as Chrome does.
+    Bun.spawn(cmd, { stdout: "ignore", stderr: "ignore", stdin: "ignore", detached: !IS_WIN }).unref();
   } catch {
     /* no chrome — nothing we can do from a tui */
   }

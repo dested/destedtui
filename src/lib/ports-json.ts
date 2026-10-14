@@ -34,7 +34,8 @@ export async function runPortsJson(args: string[]): Promise<number> {
       title: p?.title ?? null,
     };
   });
-  const out = { v: 1, at: scan.at, error: scan.error, lan: lanAddress(), servers };
+  // `platform` ("win32" | "linux") says whose listeners these are: WSL's never show on the Windows side.
+  const out = { v: 1, at: scan.at, error: scan.error, platform: process.platform, lan: lanAddress(), servers };
   process.stdout.write(`${JSON.stringify(out)}\n`);
   return scan.error ? 1 : 0;
 }

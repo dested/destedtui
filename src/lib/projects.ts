@@ -3,6 +3,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { readConfig, patchConfig } from "./config.ts";
 import { fuzzyMatch, type Match } from "./fuzzy.ts";
+import { IS_LINUX, IS_WIN, LINUX_DEFAULT_ROOT, WIN_DEFAULT_ROOT } from "./platform.ts";
 
 export interface ProjectInfo {
   /** Absolute project directory */
@@ -37,7 +38,7 @@ export function projectsRoot(): string {
   if (fromEnv) return fromEnv;
   const fromConfig = readConfig().projectsRoot;
   if (typeof fromConfig === "string" && fromConfig) return fromConfig;
-  return process.platform === "win32" ? "G:\\code" : join(homedir(), "code");
+  return IS_WIN ? WIN_DEFAULT_ROOT : IS_LINUX ? LINUX_DEFAULT_ROOT : join(homedir(), "code");
 }
 
 /** Case- and separator-insensitive key for a path (Windows paths are both). */

@@ -23,6 +23,7 @@ import { join } from "node:path";
 import { z } from "zod";
 import { processTable, type ProcInfo } from "./ports.ts";
 import { projectsRoot } from "./projects.ts";
+import { IS_LINUX, IS_WIN, winHome } from "./platform.ts";
 import { projectOf } from "./proctext.ts";
 import { treeKill } from "./run.ts";
 
@@ -92,27 +93,31 @@ export interface ProcScan {
 
 // ─── classification ───────────────────────────────────────────────────────────
 
+// Names are compared without `.exe`, so one table serves Windows (`node.exe`)
+// and Linux (`node`).
+
 /** Processes that only exist to run another one. A unit is never named after these. */
-const WRAPPERS = new Set(["bash.exe", "sh.exe", "nohup.exe", "cmd.exe", "conhost.exe", "timeout.exe", "env.exe", "bunx.exe", "npx.exe", "winpty-agent.exe"]);
+const WRAPPERS = new Set(["bash", "sh", "zsh", "dash", "nohup", "cmd", "conhost", "timeout", "env", "bunx", "npx", "winpty-agent", "setsid", "script"]);
 
 /** What counts as dev work when nothing Claude-shaped is above it. */
 const DEV = new Set([
-  "node.exe", "bun.exe", "bunx.exe", "deno.exe", "python.exe", "pythonw.exe", "python3.exe", "uv.exe",
-  "ffmpeg.exe", "ffprobe.exe", "chrome-headless-shell.exe", "postgres.exe", "pg_ctl.exe", "esbuild.exe",
-  "tail.exe", "grep.exe", "sleep.exe", "java.exe", "magick.exe", "sox.exe", "yt-dlp.exe", "remotion.exe",
-  "watchman.exe", "adb.exe", "caddy.exe", "go.exe", "cargo.exe",
+  "node", "bun", "bunx", "deno", "python", "pythonw", "python3", "uv",
+  "ffmpeg", "ffprobe", "chrome-headless-shell", "postgres", "pg_ctl", "esbuild",
+  "tail", "grep", "sleep", "java", "magick", "sox", "yt-dlp", "remotion",
+  "watchman", "adb", "caddy", "go", "cargo", "inotifywait",
 ]);
 
 const HOT_CORES = 0.5;
 const OLD_MS = 24 * 3600_000;
 
+/** Lowercase process name without `.exe`. */
 function lower(p: ProcInfo): string {
-  return p.exe.toLowerCase();
+  return p.exe.toLowerCase().replace(/\.exe$/, "");
 }
 
 function isCliClaude(p: ProcInfo, sessionPids: Set<number>): boolean {
   if (sessionPids.has(p.pid)) return true;
-  if (lower(p) !== "claude.exe") return false;
+  if (lower(p) !== "claude") return false;
   // The desktop app (Electron) is claude.exe too — its helpers carry --type=.
   return p.cmdline !== "" && !/WindowsApps|--type=/i.test(p.cmdline);
 }
@@ -120,24 +125,28 @@ function isCliClaude(p: ProcInfo, sessionPids: Set<number>): boolean {
 function isDev(p: ProcInfo): boolean {
   const e = lower(p);
   if (DEV.has(e)) return true;
-  if ((e === "chrome.exe" || e === "msedge.exe") && /--headless|--remote-debugging-p(ort|ipe)|puppeteer|playwright|\\bx\\/i.test(p.cmdline)) return true;
+  if ((e === "chrome" || e === "msedge") && /--headless|--remote-debugging-p(ort|ipe)|puppeteer|playwright|\\bx\\/i.test(p.cmdline)) return true;
   return false;
 }
 
 /** Something a dev command is launched through — climb past it when finding a unit root. */
 function isLaunchWrapper(p: ProcInfo): boolean {
   const e = lower(p);
-  if (e === "bash.exe" || e === "sh.exe") return /\s-c\b/.test(p.cmdline) || p.cmdline === "";
-  if (e === "cmd.exe") return /\s\/c\b/i.test(p.cmdline);
-  if (e === "pwsh.exe" || e === "powershell.exe") return /\s-(Command|c|File|EncodedCommand)\b/i.test(p.cmdline) && !/-NoExit/i.test(p.cmdline);
+  if (e === "bash" || e === "sh" || e === "zsh" || e === "dash") {
+    // Windows: `bash -c`. Linux also bundles the c into flag clusters (`zsh -lic`, `bash -lc`).
+    return (IS_WIN ? /\s-c\b/ : /\s-[a-z]*c[a-z]*\b/).test(p.cmdline) || p.cmdline === "";
+  }
+  if (e === "cmd") return /\s\/c\b/i.test(p.cmdline);
+  if (e === "pwsh" || e === "powershell") return /\s-(Command|c|File|EncodedCommand)\b/i.test(p.cmdline) && !/-NoExit/i.test(p.cmdline);
   return WRAPPERS.has(e) || DEV.has(e);
 }
 
-const SCRATCH = /\\Temp\\claude\\([^\\]+)\\([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
+/** A Claude scratchpad: `…\Temp\claude\<mangled>\<session>` on Windows, `/tmp/claude-<uid>/<mangled>/<session>` on Linux. */
+const SCRATCH = /[\\/](?:Temp[\\/]claude|tmp[\\/]claude-\d+)[\\/]([^\\/]+)[\\/]([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
 
-/** `G--code-dutch-pokemon` → `dutch-pokemon` */
+/** `G--code-dutch-pokemon` / `-w-code-dutch-pokemon` → `dutch-pokemon` */
 function projectFromMangled(m: string): string {
-  return m.replace(/^[A-Za-z]--code-/, "") || m;
+  return m.replace(/^(?:[A-Za-z]-|-w)-code-/, "") || m;
 }
 
 const slashes = (p: string) => p.replace(/[\\/]+/g, "/").replace(/\/$/, "").toLowerCase();
@@ -200,7 +209,8 @@ function sessionMeta(): MetaCache {
     }
   }
   const cards = new Map<string, z.infer<typeof CardFile>>();
-  const cdir = join(homedir(), ".sal", "status");
+  // Status cards are written by the Windows sal; from WSL that is /mnt/c/Users/<you>/.sal/status.
+  const cdir = join(IS_LINUX ? winHome() : homedir(), ".sal", "status");
   if (existsSync(cdir)) {
     for (const proj of readdirSync(cdir, { withFileTypes: true })) {
       if (!proj.isDirectory()) continue;
@@ -423,7 +433,7 @@ function classify(
     const flags = new Set<UnitFlag>();
     const orphan = parent === null;
     if (orphan) flags.add("orphan");
-    if (parent && lower(parent) === "services.exe") flags.add("service");
+    if (parent && lower(parent) === "services") flags.add("service");
     const unit = buildUnit(top, flags);
     // Started from a Claude scratchpad? Then we know exactly which session it was.
     const scratch = SCRATCH.exec(unit.rep.cwd) ?? SCRATCH.exec(unit.rep.cmdline) ?? SCRATCH.exec(top.cmdline);

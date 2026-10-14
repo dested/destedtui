@@ -38,11 +38,13 @@ function tokenize(cmdline: string): string[] {
  * paths inside the cwd made relative.
  */
 export function prettyCommand(cmdline: string, cwd: string, exe: string): string {
-  const rootPrefix = `${projectsRoot().replace(/[\\/]+$/, "")}\\`.toLowerCase();
+  // Compared with one separator, so `G:\code\x`, `G:/code/x` and `/w/code/x` all match.
+  const flat = (s: string) => s.replace(/\\/g, "/").toLowerCase();
+  const rootPrefix = `${flat(projectsRoot()).replace(/\/+$/, "")}/`;
   const tokens = tokenize(cmdline);
   if (tokens.length === 0) return exeName(exe);
   const head = exeName(leaf(tokens[0] ?? ""));
-  const cwdPrefix = cwd ? `${cwd.replace(/[\\/]+$/, "")}\\`.toLowerCase() : null;
+  const cwdPrefix = cwd ? `${flat(cwd).replace(/\/+$/, "")}/` : null;
   let viaPackage = false;
   const rest = tokens.slice(1).map((t) => {
     const nm = /node_modules[\\/]+(?:\.bin[\\/]+\.\.[\\/]+)?(@[^\\/]+[\\/]+[^\\/]+|[^\\/]+)/i.exec(t);
@@ -50,9 +52,9 @@ export function prettyCommand(cmdline: string, cwd: string, exe: string): string
       viaPackage = true;
       return nm[1].replace(/\\/g, "/");
     }
-    if (cwdPrefix && t.toLowerCase().startsWith(cwdPrefix)) return t.slice(cwdPrefix.length);
+    if (cwdPrefix && flat(t).startsWith(cwdPrefix)) return t.slice(cwdPrefix.length);
     // another project's file (G:/code/bx/src/daemon.ts) -> bx/src/daemon.ts
-    if (t.toLowerCase().startsWith(rootPrefix)) return t.slice(rootPrefix.length);
+    if (flat(t).startsWith(rootPrefix)) return t.slice(rootPrefix.length);
     return t;
   });
   const runtime = head.toLowerCase();

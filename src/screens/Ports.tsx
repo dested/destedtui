@@ -6,6 +6,7 @@ import { Footer } from "../components/Footer.tsx";
 import { fit, pad, wrap } from "../lib/text.ts";
 import { fuzzyMatch } from "../lib/fuzzy.ts";
 import { openInChrome } from "../lib/run.ts";
+import { IS_WIN, isWsl } from "../lib/platform.ts";
 import { projectsRoot } from "../lib/projects.ts";
 import { exeName, leaf, prettyCommand, projectOf } from "../lib/proctext.ts";
 import {
@@ -781,7 +782,8 @@ function emptyText(scan: Scan, filter: string, all: boolean): string {
 }
 
 function copyToClipboard(text: string): void {
-  const cmd = process.platform === "win32" ? ["clip"] : process.platform === "darwin" ? ["pbcopy"] : ["xclip", "-selection", "clipboard"];
+  // WSL: the Windows clipboard, through interop.
+  const cmd = IS_WIN ? ["clip"] : process.platform === "darwin" ? ["pbcopy"] : isWsl() ? ["/mnt/c/Windows/System32/clip.exe"] : ["xclip", "-selection", "clipboard"];
   try {
     const proc = Bun.spawn(cmd, { stdin: "pipe", stdout: "ignore", stderr: "ignore" });
     proc.stdin.write(text);

@@ -8,9 +8,14 @@
 // The PEB offsets below are the x64 layout (also what ARM64 Windows uses for
 // 64-bit processes). A 32-bit target would need the WOW64 PEB — node and bun
 // are 64-bit, so a failed read just leaves that field empty.
+//
+// On Linux (the `sal` WSL distro) the same exported API runs off /proc
+// instead: see `linuxLayer` in ports.linux.ts. Only the OsLayer differs.
 
 import { dlopen, FFIType, ptr, type Pointer } from "bun:ffi";
 import { networkInterfaces } from "node:os";
+import { IS_LINUX, IS_WIN } from "./platform.ts";
+import { linuxLayer } from "./ports.linux.ts";
 import { treeKill } from "./run.ts";
 
 export type Runtime = "node" | "bun" | "other";
@@ -59,9 +64,32 @@ export interface Scan {
   error: string | null;
 }
 
-// ─── FFI ──────────────────────────────────────────────────────────────────────
+/** One row of the OS process list, before the (costlier) inspect. */
+export interface Entry {
+  pid: number;
+  ppid: number;
+  exe: string;
+}
 
-const isWin = process.platform === "win32";
+/** pid → port → bind addresses. */
+export type ListenerMap = Map<number, Map<number, Set<string>>>;
+
+/**
+ * What the scanner needs from the OS. Win32 (below) and Linux /proc
+ * (`ports.linux.ts`) each provide one; everything after — chains, kill roots,
+ * classification — is shared.
+ */
+export interface OsLayer {
+  /** The process list, plus an inspector valid for this snapshot. */
+  snapshot(): { entries: Map<number, Entry>; inspect: (e: Entry) => ProcInfo };
+  listeners(): ListenerMap;
+  /** Pseudo-processes never worth listing (Windows' Idle and System). */
+  skip(pid: number): boolean;
+  /** Drop cached per-pid details for pids no longer alive. */
+  prune(alive: Map<number, ProcInfo>): void;
+}
+
+// ─── FFI ──────────────────────────────────────────────────────────────────────
 
 function loadWin32() {
   const kernel32 = dlopen("kernel32.dll", {
@@ -190,12 +218,6 @@ function listenersByPid(w: Win32): Map<number, Map<number, Set<string>>> {
 
 // ─── processes ────────────────────────────────────────────────────────────────
 
-interface Entry {
-  pid: number;
-  ppid: number;
-  exe: string;
-}
-
 // Never TextDecoder("utf-16le") here. Its decode() leaks native memory on
 // every call, shared decoder or fresh (~670 B per 520-byte name, Bun 1.3.10 on
 // Windows), and the scanner decodes every process's name every 2s: ~350 KB per
@@ -297,6 +319,41 @@ function inspect(w: Win32, e: Entry): ProcInfo {
 
 // ─── classification ───────────────────────────────────────────────────────────
 
+const win32Layer: OsLayer = {
+  snapshot() {
+    const w = api();
+    if (!w) return { entries: new Map(), inspect: (e) => blankInfo(e) };
+    return { entries: snapshot(w), inspect: (e) => inspect(w, e) };
+  },
+  listeners() {
+    const w = api();
+    return w ? listenersByPid(w) : new Map();
+  },
+  skip: (pid) => pid === 0 || pid === 4, // idle / System
+  prune(alive) {
+    // Dead pids would otherwise pin their cmdline/cwd forever.
+    if (detailCache.size <= alive.size * 2) return;
+    for (const key of detailCache.keys()) {
+      const pid = Number(key.slice(0, key.indexOf(":")));
+      if (!alive.has(pid)) detailCache.delete(key);
+    }
+  },
+};
+
+export function blankInfo(e: Entry): ProcInfo {
+  return { pid: e.pid, ppid: e.ppid, exe: e.exe, cmdline: "", cwd: "", startedAt: 0, memory: 0, commit: 0, cpuMs: 0 };
+}
+
+/** This platform's OS layer, or why there isn't one. */
+function layer(): { os: OsLayer; error: null } | { os: null; error: string } {
+  if (IS_WIN) {
+    if (!api()) return { os: null, error: `couldn't load Win32 APIs: ${win32Error ?? "unknown"}` };
+    return { os: win32Layer, error: null };
+  }
+  if (IS_LINUX) return { os: linuxLayer, error: null };
+  return { os: null, error: `process scanning isn't built for ${process.platform}` };
+}
+
 export function runtimeOf(exe: string): Runtime {
   const name = exe.toLowerCase();
   if (name === "node.exe" || name === "node") return "node";
@@ -304,12 +361,18 @@ export function runtimeOf(exe: string): Runtime {
   return "other";
 }
 
-/** Processes a dev command is launched through: runtimes, and the cmd.exe /c that npm/pnpm/yarn wrap scripts in. */
+/** Processes a dev command is launched through: runtimes, and the run-and-exit shells npm/pnpm/yarn wrap scripts in. */
 function isLauncher(p: ProcInfo): boolean {
   if (runtimeOf(p.exe) !== "other") return true;
+  const exe = p.exe.toLowerCase();
   // `/c` = run-and-exit; an interactive cmd.exe is somebody's terminal, never a target.
-  return p.exe.toLowerCase() === "cmd.exe" && /\s\/c\b/i.test(p.cmdline);
+  if (exe === "cmd.exe") return /\s\/c\b/i.test(p.cmdline);
+  // Same rule for POSIX shells: `sh -c "vite"` is plumbing, a bare `zsh` is a terminal.
+  if (POSIX_SHELLS.has(exe)) return /\s-\w*c\w*\b/.test(p.cmdline);
+  return false;
 }
+
+const POSIX_SHELLS = new Set(["sh", "bash", "zsh", "dash"]);
 
 /**
  * Walk up from the listener while the parent is still part of the same dev
@@ -339,19 +402,18 @@ export interface ScanOptions {
 
 export function scanServers(opts: ScanOptions): Scan {
   const at = Date.now();
-  if (!isWin) return { servers: [], at, error: "localhost scanning is Windows-only for now" };
-  const w = api();
-  if (!w) return { servers: [], at, error: `couldn't load Win32 APIs: ${win32Error ?? "unknown"}` };
+  const { os, error } = layer();
+  if (!os) return { servers: [], at, error };
 
-  const listening = listenersByPid(w);
-  const entries = snapshot(w);
+  const listening = os.listeners();
+  const { entries, inspect: inspectEntry } = os.snapshot();
   const infos = new Map<number, ProcInfo>();
   const info = (pid: number): ProcInfo | null => {
     const hit = infos.get(pid);
     if (hit) return hit;
     const e = entries.get(pid);
     if (!e) return null;
-    const p = inspect(w, e);
+    const p = inspectEntry(e);
     infos.set(pid, p);
     return p;
   };
@@ -364,7 +426,7 @@ export function scanServers(opts: ScanOptions): Scan {
 
   const servers: Server[] = [];
   for (const [pid, ports] of listening) {
-    if (pid === 0 || pid === 4) continue; // idle / System
+    if (os.skip(pid)) continue;
     const e = entries.get(pid);
     if (!e) continue;
     const runtime = runtimeOf(e.exe);
@@ -436,21 +498,15 @@ export function processTable(): ProcessTable {
   const at = Date.now();
   const procs = new Map<number, ProcInfo>();
   const ports = new Map<number, number[]>();
-  if (!isWin) return { procs, ports, at, error: "process scanning is Windows-only for now" };
-  const w = api();
-  if (!w) return { procs, ports, at, error: `couldn't load Win32 APIs: ${win32Error ?? "unknown"}` };
-  for (const e of snapshot(w).values()) {
-    if (e.pid === 0 || e.pid === 4) continue;
-    procs.set(e.pid, inspect(w, e));
+  const { os, error } = layer();
+  if (!os) return { procs, ports, at, error };
+  const { entries, inspect: inspectEntry } = os.snapshot();
+  for (const e of entries.values()) {
+    if (os.skip(e.pid)) continue;
+    procs.set(e.pid, inspectEntry(e));
   }
-  for (const [pid, byPort] of listenersByPid(w)) ports.set(pid, [...byPort.keys()].sort((a, b) => a - b));
-  // Dead pids would otherwise pin their cmdline/cwd forever.
-  if (detailCache.size > procs.size * 2) {
-    for (const key of detailCache.keys()) {
-      const pid = Number(key.slice(0, key.indexOf(":")));
-      if (!procs.has(pid)) detailCache.delete(key);
-    }
-  }
+  for (const [pid, byPort] of os.listeners()) ports.set(pid, [...byPort.keys()].sort((a, b) => a - b));
+  os.prune(procs);
   return { procs, ports, at, error: null };
 }
 
