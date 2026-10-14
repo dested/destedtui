@@ -1,0 +1,4 @@
+# Files Linux runs directly (WSL sources/execs the working tree) must stay LF.
+*.zsh text eol=lf
+*.sh text eol=lf
+bin/*.mjs text eol=lf
