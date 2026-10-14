@@ -197,11 +197,57 @@ async function toolsFromPath(serverMajor: string, onProgress: (p: ToolProgress) 
   }
 }
 
+/** Debian/Ubuntu's per-major client tools: `/usr/lib/postgresql/<major>/bin`. */
+function systemTools(major: string): PgTools | null {
+  const bin = `/usr/lib/postgresql/${major}/bin`;
+  const pgDump = `${bin}/pg_dump`;
+  const pgRestore = `${bin}/pg_restore`;
+  if (!existsSync(pgDump) || !existsSync(pgRestore)) return null;
+  return { pgDump, pgRestore, psql: `${bin}/psql`, source: "path", toolMajor: major };
+}
+
+/**
+ * `sudo -n apt-get install -y postgresql-client-<major>` (the PGDG repo carries
+ * every supported major), each output line into the event log. `-n` never
+ * prompts: no passwordless sudo just fails over to PATH tools.
+ */
+async function aptInstall(major: string, onProgress: (p: ToolProgress) => void): Promise<boolean> {
+  const pkg = `postgresql-client-${major}`;
+  onProgress({ phase: "download", detail: `Installing ${pkg} (sudo -n apt-get install)...` });
+  try {
+    const proc = Bun.spawn(["sudo", "-n", "apt-get", "install", "-y", pkg], {
+      stdin: "ignore",
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env, DEBIAN_FRONTEND: "noninteractive" },
+    });
+    const pump = async (stream: ReadableStream<Uint8Array>) => {
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for await (const chunk of stream) {
+        buffer += decoder.decode(chunk, { stream: true });
+        const lines = buffer.split(/\r?\n/);
+        buffer = lines.pop() ?? "";
+        for (const line of lines) if (line.trim()) onProgress({ phase: "download", detail: line.trim() });
+      }
+      if (buffer.trim()) onProgress({ phase: "download", detail: buffer.trim() });
+    };
+    await Promise.all([pump(proc.stdout), pump(proc.stderr)]);
+    const code = await proc.exited;
+    if (code !== 0) onProgress({ phase: "probe", detail: `apt-get install ${pkg} failed (exit ${code})` });
+    return code === 0;
+  } catch (err) {
+    onProgress({ phase: "probe", detail: `apt-get install ${pkg} failed: ${msg(err)}` });
+    return false;
+  }
+}
+
 /**
  * Ensure pg_dump/pg_restore matching the server's major version.
  * Windows: downloads official EDB binary zips and caches ~50MB of bin/ per major
- * under ~/.destedtui/pg/<major>. Other platforms (and download failure): falls
- * back to PATH tools when their version is >= the server's.
+ * under ~/.destedtui/pg/<major>. Linux: the distro's per-major client in
+ * /usr/lib/postgresql/<major>/bin, apt-installed when missing. Anything else
+ * (and failure): falls back to PATH tools when their version is >= the server's.
  */
 export async function ensureTools(serverMajor: string, onProgress: (p: ToolProgress) => void): Promise<PgTools> {
   const cached = cachedTools(serverMajor);
@@ -229,6 +275,21 @@ export async function ensureTools(serverMajor: string, onProgress: (p: ToolProgr
         }
       } catch (err) {
         onProgress({ phase: "probe", detail: `Download of ${version} failed: ${msg(err)}` });
+      }
+    }
+  }
+
+  if (process.platform === "linux") {
+    const system = systemTools(serverMajor);
+    if (system) {
+      onProgress({ phase: "ready", detail: `Using PostgreSQL ${serverMajor} tools from ${dirname(system.pgDump)}` });
+      return system;
+    }
+    if (await aptInstall(serverMajor, onProgress)) {
+      const installed = systemTools(serverMajor);
+      if (installed) {
+        onProgress({ phase: "ready", detail: `PostgreSQL ${serverMajor} client installed` });
+        return installed;
       }
     }
   }

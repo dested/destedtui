@@ -34,8 +34,20 @@ export interface PtyHostHandlers {
 
 const HOST_PATH = join(import.meta.dir, "..", "..", "ptyhost", "host.mjs");
 
+/**
+ * Windows: taskkill the sidecar's whole tree. POSIX: SIGTERM it; its shutdown
+ * handler takes every pane's session down before it exits (host.mjs killTrees).
+ */
 function treeKill(pid: number): void {
-  Bun.spawnSync(["taskkill", "/pid", String(pid), "/T", "/F"], { stdout: "ignore", stderr: "ignore" });
+  if (process.platform === "win32") {
+    Bun.spawnSync(["taskkill", "/pid", String(pid), "/T", "/F"], { stdout: "ignore", stderr: "ignore" });
+    return;
+  }
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    /* already gone */
+  }
 }
 
 export class PtyHost {

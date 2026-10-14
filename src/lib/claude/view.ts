@@ -75,9 +75,9 @@ export function projectOf(cwd: string): string {
   const root = norm(rootRaw).toLowerCase();
   if (lc.startsWith(`${root}/`)) return c.slice(root.length + 1).split("/")[0] ?? c;
   if (lc === root) return rootRaw;
-  // Claude spawned from inside a session's scratchpad (…/Temp/claude/G--code-sigil/<session>/…)
-  // belongs to the project the slug names.
-  const slug = c.match(/\/temp\/claude\/([^/]+)\//i)?.[1];
+  // Claude spawned from inside a session's scratchpad (…/Temp/claude/G--code-sigil/<session>/…,
+  // /tmp/claude-1000/-w-code-sigil/<session>/… on Linux) belongs to the project the slug names.
+  const slug = c.match(/\/(?:temp\/claude|tmp\/claude-\d+)\/([^/]+)\//i)?.[1];
   if (slug) {
     const rootSlug = root.replace(/[:/]/g, "-");
     if (slug.toLowerCase().startsWith(`${rootSlug}-`)) return slugProject(slug.slice(rootSlug.length + 1), rootRaw);

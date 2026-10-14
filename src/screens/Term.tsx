@@ -7,6 +7,7 @@ import { Button } from "../components/ProjectCard.tsx";
 import { pad } from "../lib/text.ts";
 import { TerminalView } from "../components/TerminalView.tsx";
 import { term, type TermSession } from "../lib/term.ts";
+import { IS_WIN } from "../lib/platform.ts";
 
 const RAIL_WIDTH = 34;
 const CARD_HEIGHT = 5; // border 2 + 3 inner lines
@@ -513,7 +514,7 @@ function Pane({
       ) : (
         <box style={{ flexGrow: 1, flexDirection: "column", justifyContent: "center", alignItems: "center", gap: 1 }}>
           <text fg={T.teal}>▓ terminals</text>
-          <text fg={T.dim}>your pwsh, or a claude session — as many as you like</text>
+          <text fg={T.dim}>{`your ${IS_WIN ? "pwsh" : "zsh"}, or a claude session — as many as you like`}</text>
           <box style={{ flexDirection: "row", gap: 2, marginTop: 1, height: 1 }}>
             <Button label="+ shell" color={T.green} onPress={() => term.create("shell", cwd)} />
             <Button label="✦ claude" color={T.purple} onPress={() => term.create("claude", cwd)} />

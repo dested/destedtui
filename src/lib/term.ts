@@ -1,6 +1,7 @@
 import { Terminal } from "@xterm/headless";
 import { PtyHost } from "./ptyhost.ts";
 import { isRecord, patchConfig, readConfig } from "./config.ts";
+import { IS_WIN } from "./platform.ts";
 
 /**
  * The terminal multiplexer's brain. Owns a fleet of interactive PTY sessions
@@ -55,17 +56,29 @@ const CLAUDE_CMD = "claude --dangerously-skip-permissions";
 
 /**
  * Your shell, with your whole profile — pwsh if you have it, else Windows
- * PowerShell. Resolved once; the pty sidecar spawns this exact path.
+ * PowerShell; zsh on Linux. Resolved once; the pty sidecar spawns this exact path.
  */
-const SHELL_FILE: string =
-  Bun.which("pwsh") ?? Bun.which("pwsh.exe") ?? Bun.which("powershell") ?? Bun.which("powershell.exe") ?? "powershell.exe";
+const SHELL_FILE: string = IS_WIN
+  ? (Bun.which("pwsh") ?? Bun.which("pwsh.exe") ?? Bun.which("powershell") ?? Bun.which("powershell.exe") ?? "powershell.exe")
+  : (Bun.which("zsh") ?? "/bin/zsh");
 
 /**
  * Load the full profile (oh-my-posh, PSReadLine, aliases — "all my shit") but
  * keep the profile's auto-launch of the project picker from firing inside a
- * pane. The shell's own escape hatch (`shell/destedtui.ps1`) reads this.
+ * pane. The shell's own escape hatch (`shell/destedtui.ps1`, `.zsh`) reads
+ * this; SAL_NO_PICK is the WSL zshrc's own picker guard.
  */
-const SHELL_ENV: Record<string, string> = { DESTEDTUI_NO_AUTOSTART: "1" };
+const SHELL_ENV: Record<string, string> = IS_WIN ? { DESTEDTUI_NO_AUTOSTART: "1" } : { DESTEDTUI_NO_AUTOSTART: "1", SAL_NO_PICK: "1" };
+
+/**
+ * Shell argv for a pane. A claude pane runs claude as the shell's startup
+ * command and drops back into a shell when it exits (pwsh -NoExit, zsh's
+ * `; exec zsh`) — writing it as keystrokes would race a slow profile.
+ */
+function shellArgs(kind: TermKind): string[] {
+  if (IS_WIN) return kind === "claude" ? ["-NoLogo", "-NoExit", "-Command", CLAUDE_CMD] : ["-NoLogo"];
+  return kind === "claude" ? ["-lic", `${CLAUDE_CMD}; exec zsh`] : ["-l", "-i"];
+}
 
 class TermManager {
   private host: PtyHost;
@@ -165,9 +178,7 @@ class TermManager {
     // as a startup command (-NoExit so the pane survives claude quitting, and so
     // it runs reliably *after* your profile finishes loading — writing the
     // command as keystrokes races a slow profile).
-    const args =
-      kind === "claude" ? ["-NoLogo", "-NoExit", "-Command", CLAUDE_CMD] : ["-NoLogo"];
-    this.host.spawn({ id, file: SHELL_FILE, args, cwd, cols, rows, env: SHELL_ENV });
+    this.host.spawn({ id, file: SHELL_FILE, args: shellArgs(kind), cwd, cols, rows, env: SHELL_ENV });
 
     this.bump();
     return sess;

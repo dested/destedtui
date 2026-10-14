@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { z } from "zod";
 import { trackProcess, treeKill } from "./run.ts";
@@ -181,6 +183,17 @@ function shortToolInput(input: Record<string, unknown>): string {
   return "";
 }
 
+/**
+ * The claude CLI. Windows: the npm `.cmd` shim. Linux: PATH, else the native
+ * installer's `~/.local/bin/claude` — a login shell without the zshrc (or a
+ * Windows-launched `wsl.exe --exec`) doesn't have that on PATH.
+ */
+function claudeExe(): string {
+  if (process.platform === "win32") return "claude.cmd";
+  const local = join(homedir(), ".local", "bin", "claude");
+  return Bun.which("claude") ?? (existsSync(local) ? local : "claude");
+}
+
 export function startReview(
   root: string,
   scope: ReviewScope,
@@ -201,7 +214,7 @@ export function startReview(
 
   const outcome = (async (): Promise<ReviewOutcome> => {
     const prompt = await buildPrompt(scope);
-    const exe = process.platform === "win32" ? "claude.cmd" : "claude";
+    const exe = claudeExe();
     // Prompt goes in over stdin: Windows argv mangles JSON, so keep argv to simple tokens.
     const proc = Bun.spawn(
       [
