@@ -53,11 +53,13 @@ const HELP = `keys — one vault for every AI API key (DPAPI-encrypted, ${VAULT_
 usage:
   keys                                   open the Keys screen
   keys list [--project p] [--provider x] [--all] [--json]
-  keys new <provider> [--project p] [--label l] [--env-file f] [--replace] [--no-env] [--json]
+  keys new <provider> [--project p] [--label l] [--env f] [--replace] [--no-env] [--json]
                                          mint a key when the provider allows it; otherwise
                                          open its console page and print the next step
-  keys add <provider> [--project p] (--clipboard | --stdin) [--label l] [--env-file f] [--replace] [--no-env]
+  keys add <provider> [--project p] (--clipboard | --stdin) [--label l] [--env f] [--replace] [--no-env]
                                          store a key made in a console; --clipboard clears it after
+                                         --env: the project's env file (default .env), relative or
+                                         absolute inside the project (not --env-file: node eats that)
   keys env <project> [--dry-run]         write the project's active keys into its .env
   keys revoke <id> [--local-only]        revoke on the provider (when possible), mark it, drop its .env line
   keys reuse [--json]                    the same key used by more than one project
@@ -409,7 +411,7 @@ async function run(argv: string[]): Promise<number> {
         provider,
         project: project(p),
         label: p.flags.get("label"),
-        envFile: p.flags.get("env-file"),
+        envFile: p.flags.get("env") ?? p.flags.get("env-file"),
         replace: p.bools.has("replace"),
         writeEnv: !p.bools.has("no-env"),
         openConsole: !p.bools.has("no-open"),
@@ -439,7 +441,7 @@ async function run(argv: string[]): Promise<number> {
       const proj = project(p);
       const secret = await secretInput(p);
       const res = await addKey(
-        { provider, project: proj, label: p.flags.get("label"), envFile: p.flags.get("env-file"), replace: p.bools.has("replace"), writeEnv: !p.bools.has("no-env") },
+        { provider, project: proj, label: p.flags.get("label"), envFile: p.flags.get("env") ?? p.flags.get("env-file"), replace: p.bools.has("replace"), writeEnv: !p.bools.has("no-env") },
         secret.value,
       );
       if (secret.fromClipboard) await clearClipboard();

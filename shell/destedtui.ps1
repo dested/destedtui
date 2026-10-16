@@ -19,9 +19,9 @@
 #
 # Escape hatches:
 #   $env:DESTEDTUI_NO_AUTOSTART = 1     turn the auto-launch off for a session
-#   $env:DESTEDTUI_PROJECTS_ROOT        scan somewhere other than g:\code
+#   $env:DESTEDTUI_PROJECTS_ROOT        scan somewhere other than W:\code (G:\code without a W: drive)
 
-$global:DestedTuiProjectsRoot = if ($env:DESTEDTUI_PROJECTS_ROOT) { $env:DESTEDTUI_PROJECTS_ROOT } else { 'G:\code' }
+$global:DestedTuiProjectsRoot = if ($env:DESTEDTUI_PROJECTS_ROOT) { $env:DESTEDTUI_PROJECTS_ROOT } elseif (Test-Path 'W:\code') { 'W:\code' } else { 'G:\code' }
 
 function proj {
     Invoke-DestedTuiCd '--projects'

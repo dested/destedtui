@@ -9,11 +9,10 @@
 // holds (or might hold) the old value.
 
 import { randomBytes } from "node:crypto";
-import { join } from "node:path";
 import { openInChrome } from "../run.ts";
 import { activityOf, type Activity } from "./activity.ts";
 import { appsUsing, deployedFolders, getDrydock, type AppUse, type DrydockCache, type MappedApp } from "./deployed.ts";
-import { removeFromEnv } from "./envfile.ts";
+import { envPath, removeFromEnv } from "./envfile.ts";
 import { UserError } from "./errors.ts";
 import { addKey, adapterFor, consoleHint, mintAbility, newKey, resolveProject, revokeRemote, writeEnv, type RemoteRevoke } from "./ops.ts";
 import { pushProject } from "./push.ts";
@@ -457,7 +456,7 @@ async function retireValue(fp: string): Promise<{ records: number; envRemoved: s
     if (k.project === "shared") continue;
     try {
       let removed = false;
-      for (const dir of resolveProject(k.project).dirs) if (removeFromEnv(join(dir, k.envFile), envVarFor(v, k), k.value)) removed = true;
+      for (const dir of resolveProject(k.project).dirs) if (removeFromEnv(envPath(dir, k.envFile), envVarFor(v, k), k.value)) removed = true;
       if (removed) envRemoved.push(k.project);
     } catch {
       /* folder gone */

@@ -13,8 +13,8 @@ export const IS_LINUX = process.platform === "linux";
 /** The distro the W: drive and the Linux build live in. */
 export const WSL_DISTRO = process.env.DESTEDTUI_WSL_DISTRO || "sal";
 
-/** The projects root on each side. */
-export const WIN_DEFAULT_ROOT = "G:\\code";
+/** The projects root on each side. Windows: `W:\code` (the WSL tree) once it exists, else the old `G:\code`. */
+export const WIN_DEFAULT_ROOT = IS_WIN && existsSync("W:\\code") ? "W:\\code" : "G:\\code";
 export const LINUX_DEFAULT_ROOT = "/w/code";
 /** The distro's projects root (`/w/code`) as Windows sees it. */
 export const WIN_WSL_ROOT = "W:\\code";

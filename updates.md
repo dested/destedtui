@@ -2,6 +2,10 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-15 — Windows root is W:\code; keys --env
+Asked: `keys.exe add … --env-file 'W:\code\clever\.env'` from Windows pwsh failed three ways. Done: Windows default projects root is `W:\code` when it exists (`WIN_DEFAULT_ROOT`, `shell/destedtui.ps1`, `shell/install.ps1`); `--env-file` renamed `--env` (Node eats `--env-file` off argv; old name still read when run under bun directly); an absolute `--env` is stored relative to the project and refused outside it; `envPath()` makes every .env writer accept an old absolute record. Scratch-vault smoke: absolute `.env.local`, default `.env`, outside path refused; tsc green.
+Touched: src/lib/platform.ts, src/lib/keys/{ops,envfile,rotate}.ts, src/keys.tsx, shell/destedtui.ps1, shell/install.ps1, cliffnotes.md
+
 ## 2026-10-14 — keys: W:\code as well as G:\code
 Asked: make keys support the WSL `W:` directory, not just `G:`. Done: `projectRoots()` (`W:\code`, `G:\code`) behind every keys lookup: `resolveProject` returns every copy (`dirs`), and env writes, revoke and rotate retire hit each. Also cwd inference, import (mirrored lines folded, diverging copies a conflict), the Drydock folder index, and activity (W: commits through Linux git, the distro's prompt history). The WSL bridge no longer pins the root to `W:\code`, which had hidden the 59 G:-only vault projects from `keys` in WSL. tsc green; verify.md § Linux 9a passed against scratch roots; real-root resolution checked read-only. Live `keys.exe` runs `G:\code\destedtui`, so it needs that copy updated. Board #542.
 Touched: src/lib/{platform,projects,winforward}.ts, src/lib/keys/{ops,importer,deployed,activity,envfile,rotate}.ts, src/{keys,index}.tsx, src/screens/Keys.tsx, bin/launch.mjs, skill/keys/SKILL.md, features/keys.md, cliffnotes.md, verify.md, decisions.md

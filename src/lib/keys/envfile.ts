@@ -3,8 +3,13 @@
 // assignment lines for the vars we own are replaced, added or removed.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { dirname, join, relative } from "node:path";
-import { IS_WIN, WSL_DISTRO, winToLinux } from "../platform.ts";
+import { dirname, isAbsolute, join, relative } from "node:path";
+import { IS_WIN, WSL_DISTRO, normalizeWslUnc, winToLinux } from "../platform.ts";
+
+/** A record's env file on disk: relative to the project folder, or (records from before `--env` was checked) already absolute. */
+export function envPath(projectDir: string, envFile: string): string {
+  return isAbsolute(envFile) || /^[a-zA-Z]:/.test(envFile) ? normalizeWslUnc(envFile) : join(projectDir, envFile);
+}
 
 export type Change = "add" | "update" | "same" | "remove";
 
@@ -123,7 +128,7 @@ export interface IgnoreResult {
  * one we just make sure the project's .gitignore names it.
  */
 export function ensureIgnored(projectDir: string, envFile: string): IgnoreResult {
-  const abs = join(projectDir, envFile);
+  const abs = envPath(projectDir, envFile);
   const rel = relative(projectDir, abs).replace(/\\/g, "/");
   const isRepo = existsSync(join(projectDir, ".git"));
   const tracked = isRepo && git(projectDir, ["ls-files", "--error-unmatch", rel]) === 0;

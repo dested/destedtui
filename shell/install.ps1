@@ -117,7 +117,7 @@ if ($PSCmdlet.ShouldProcess($profilePath, $(if ($had) { 'move destedtui block to
 
 Write-Host ""
 Write-Note "sources: $integration"
-Write-Note "root:    $(if ($env:DESTEDTUI_PROJECTS_ROOT) { $env:DESTEDTUI_PROJECTS_ROOT } else { 'G:\code' })"
+Write-Note "root:    $(if ($env:DESTEDTUI_PROJECTS_ROOT) { $env:DESTEDTUI_PROJECTS_ROOT } elseif (Test-Path 'W:\code') { 'W:\code' } else { 'G:\code' })"
 Write-Host "  open a new shell in the projects root, or type " -NoNewline -ForegroundColor DarkGray
 Write-Host "proj" -ForegroundColor Cyan
 Write-Host ""

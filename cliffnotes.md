@@ -214,7 +214,7 @@ src/
 | The picker's cd handoff | `src/lib/cd.ts` + `chooseProject` in `App.tsx` + `proj` in `shell/destedtui.ps1` |
 | What the card buttons run | `detectStack` → `devCommand` in `lib/projects.ts`; `CLAUDE_COMMAND` in `ProjectCard.tsx` |
 | When the picker auto-opens | `Test-DestedTuiAutostart` in `shell/destedtui.ps1`; `_destedtui_autostart` in `shell/destedtui.zsh` |
-| Projects root (default `g:\code`, `/w/code` on Linux) | `projectsRoot()` — `DESTEDTUI_PROJECTS_ROOT` > config `projectsRoot` > platform default |
+| Projects root (Windows `W:\code` when the drive exists, else `G:\code`; `/w/code` on Linux) | `projectsRoot()` — `DESTEDTUI_PROJECTS_ROOT` > config `projectsRoot` > platform default |
 | Where keys looks for a project (`W:\code` then `G:\code`) | `projectRoots()` in `lib/projects.ts`; `resolveProject` (`dirs` = every copy) + `projectFromCwd` in `lib/keys/ops.ts` |
 | Anything that differs between Windows and WSL | `src/lib/platform.ts` first; then the `*.linux.ts` siblings; grep `IS_WIN` for the rest |
 | A Windows-only screen opened from WSL | `windowsTarget` in `src/lib/winforward.ts` (+ `go` in `App.tsx`, `WINDOWS_TILES` in `MainMenu.tsx`, `WINDOWS_ACTIONS` in `Projects.tsx`) |
@@ -307,6 +307,7 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **POSIX kill from an exit handler needs the detached reaper.** A `setTimeout` SIGKILL never fires once the TUI exits, so `posixTreeKill` SIGTERMs now and leaves a detached `/bin/sh -c "sleep 2; kill -9 …"`. Scripts must spawn `detached` (setsid) or a group kill takes the TUI's own group with it.
 - **Linux claude is a version-named binary** (`~/.local/share/claude/versions/<ver>`, via `~/.local/bin/claude`), so an exe basename like `2.1.296` falls back to `comm` (`claude`). It's not on PATH in `zsh -lc` (only the interactive zshrc adds it): `claudeExe()` in `lib/review.ts` falls back to `~/.local/bin/claude`.
 - **Driving `wsl.exe` from Git Bash: `export MSYS_NO_PATHCONV=1`**, and never put a `\\` inside a Bash heredoc that writes source (it arrives as one `\`). Write backslash strings with the Edit tool.
+- **Never name a bin flag `--env-file`.** Node 22 honors `--env-file` anywhere on argv, even after the script, so the Node launcher dies (`node: <file>: not found`) or silently loads that file into its env. `keys` takes `--env`.
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 
 ## Status

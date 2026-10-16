@@ -8,7 +8,7 @@ import { projectRoots } from "../projects.ts";
 import { openInChrome } from "../run.ts";
 import { ADAPTERS, type AdminInput, type MintAdapter } from "./adapters/index.ts";
 import { ProviderError, UserError } from "./errors.ts";
-import { ensureIgnored, removeFromEnv, upsertEnv, type EnvPlan, type IgnoreResult } from "./envfile.ts";
+import { ensureIgnored, envPath, removeFromEnv, upsertEnv, type EnvPlan, type IgnoreResult } from "./envfile.ts";
 import { scanEnvFiles, type Finding } from "./importer.ts";
 import { PROVIDER_ID_ALIASES } from "./providers.ts";
 import {
@@ -83,6 +83,18 @@ export function projectFromCwd(cwd: string, roots = projectRoots()): string | un
     if (top) return top;
   }
   return undefined;
+}
+
+/** An env file as stored on the record: relative to the project folder. An absolute path must land inside it. */
+function projectRelative(project: ProjectRef, file: string): string {
+  if (!isAbsolute(file) && !/^[a-zA-Z]:/.test(file) && !file.startsWith("\\\\")) return file;
+  if (!project.dirs.length) throw new UserError(`--env can't be an absolute path for "${SHARED}" (it has no folder)`);
+  const abs = normalizeWslUnc(file);
+  for (const dir of project.dirs) {
+    const rel = relative(dir, abs);
+    if (rel && !rel.startsWith("..") && !isAbsolute(rel)) return rel;
+  }
+  throw new UserError(`--env ${file} is outside ${project.dirs.join(" and ")}`);
 }
 
 function sameProject(a: string, b: string): boolean {
@@ -251,6 +263,7 @@ async function store(
   note: string | undefined,
 ): Promise<StoreResult> {
   const project = resolveProject(opts.project);
+  const envFile = opts.envFile === undefined ? undefined : projectRelative(project, opts.envFile);
   const stored = await mutate((v) => {
     const provider = getProvider(v, opts.provider);
     const current = assertSlot(v, provider, project.slug, opts.replace);
@@ -265,7 +278,7 @@ async function store(
       createdAt: new Date().toISOString(),
       source,
       remoteId,
-      envFile: opts.envFile ?? current?.envFile ?? ".env",
+      envFile: envFile ?? current?.envFile ?? ".env",
       envVar: current?.envVar,
     };
     v.keys.push(record);
@@ -377,7 +390,7 @@ export async function writeEnv(projectName: string, dryRun: boolean): Promise<En
   for (const dir of project.dirs)
     for (const [file, vars] of byFile) {
       if (!dryRun) result.ignore.push({ file, dir, ...ensureIgnored(dir, file) });
-      result.plans.push(upsertEnv(join(dir, file), vars, dryRun));
+      result.plans.push(upsertEnv(envPath(dir, file), vars, dryRun));
     }
   return result;
 }
@@ -464,7 +477,7 @@ export async function revokeKey(id: string, opts: { localOnly?: boolean; keepEnv
   let envRemoved = false;
   if (!opts.keepEnv && key.project !== SHARED) {
     try {
-      for (const dir of resolveProject(key.project).dirs) if (removeFromEnv(join(dir, key.envFile), envVarFor(v, key), key.value)) envRemoved = true;
+      for (const dir of resolveProject(key.project).dirs) if (removeFromEnv(envPath(dir, key.envFile), envVarFor(v, key), key.value)) envRemoved = true;
     } catch {
       /* project folder gone — nothing to clean */
     }
