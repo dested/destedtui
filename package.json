@@ -6,7 +6,8 @@
   "bin": {
     "destedtui": "./bin/destedtui.mjs",
     "review": "./bin/review.mjs",
-    "keys": "./bin/keys.mjs"
+    "keys": "./bin/keys.mjs",
+    "tabs": "./bin/tabs.mjs"
   },
   "scripts": {
     "dev": "bun run src/index.tsx",

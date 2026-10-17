@@ -129,6 +129,15 @@ Touchpoints: `src/lib/bx.ts`, `src/screens/Bx.tsx`, bx `src/daemon/debug.ts`
 4. Profiles: make a throwaway profile (`bx --profile 0-prune-test --headless open about:blank`, then `bx --profile 0-prune-test stop`; the `0-` sorts it first by name), then `--route bx --size 160x40 --keys "wait2500 click:⛁_profiles wait5000 wait5000 s s snap x snap x wait2000 snap click:✕_prune snap escape escape wait1500 snap"`. Expect the row armed, then `✓ deleted 1 profile, freed …` with the folder and its log gone from disk, then prune ARMED ONLY (`⚠ delete N profiles unused for 7d+ …`). `escape` disarms it. Never send a second prune press in a test. The bx screen's button should read `⛁ profiles <total>`.
 5. Scanner leak guard: run `processTable()` ×1000 in a loop and sample `processTable().procs.get(process.pid).commit`. It must stay flat (within ±30 MB), where the TextDecoder leak grew +340 MB.
 
+### Tabs [cheap → retitles every live tab for ~1s]
+Touchpoints: `src/tabs.tsx`, `src/lib/tabs/`, `src/screens/Tabs.tsx`, `scripts/tabs-*.ps1`, `bin/tabs.mjs`
+1. `pwsh -NoProfile -File scripts/tabs-uia.ps1` → every Windows Terminal window with its tab titles; the main one has the most tabs. Keep the output: it's the "before".
+2. `tabs save verify-test --hwnd <that hwnd>` → the table: each mapped tab's cwd folder matches its title, your own tab is "skipped this tab", renamed tabs are listed as unmatched. Run step 1 again: identical titles, no `§tabs` anywhere.
+3. Through the bridge: `wsl.exe -d sal --exec bash -c '/mnt/c/Users/dested/.bun/bin/tabs.exe save verify-wsl --hwnd <n>'` → same mapping; titles back.
+4. `tabs restore verify-test --dry-run` → one `new-tab` line per tab plus the joined `wt -w 0 …`. Never run a real restore in a test: it opens tabs.
+5. Synthetic rows (shell, apps, a missing transcript) in a scratch `TABS_DIR`, then `TABS_DIR=<scratch> bun scripts/snap-claude.tsx --route tabs --snapshot <name> --size 150x34 --keys "snap a snap click:<title> snap"`. Never press enter on the tab list in a snap.
+6. `tabs rm verify-test`.
+
 ### Core-logic smoke (no DB needed) [medium]
 Touchpoints: `src/lib/discovery.ts`, `pgurl.ts`, `zip.ts`
 Write a scratch script (outside the repo) that builds a fake monorepo + `.env`, then asserts: `discover()` finds packages/dbs, `parsePgUrl` decodes an encoded password, and `createBackupZip` → `readZipMetadata` → `extractZipEntry` round-trips a few MB byte-identically.

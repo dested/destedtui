@@ -9,6 +9,8 @@
 #   term           jump straight into the terminal multiplexer, here
 #   ports          every node/bun server listening on localhost: open, cd, kill
 #   procs          what every claude session spun up: cpu, orphans, kill
+#   save-sessions <name>     tabs save <name>: snapshot this Windows Terminal window's tabs
+#   restore-sessions [name]  tabs restore [name]: tick tabs, reopen them in this window
 #   auto-launch    the picker opens by itself when an interactive shell starts
 #                  in the projects root (the `sal` terminal profile's /w/code)
 #
@@ -67,6 +69,19 @@ term() {
 
 ports() { _destedtui_cd --ports }
 procs() { _destedtui_cd --procs }
+
+# The `tabs` bin by full path: plain `tabs` is also ncurses' tab-stop tool
+# (/usr/bin/tabs), which wins whenever ~/.bun/bin isn't first on PATH.
+_destedtui_tabs() {
+  local bin=$HOME/.bun/bin/tabs
+  if [[ ! -x $bin ]]; then
+    print -u2 "tabs isn't linked - run 'bun link' in /w/code/destedtui"
+    return 1
+  fi
+  $bin "$@"
+}
+save-sessions() { _destedtui_tabs save "$@" }
+restore-sessions() { _destedtui_tabs restore "$@" }
 
 # Only a real interactive terminal that STARTED in the projects root: never a
 # `zsh -c`/`-ic` command, a pipe, a term pane, a `dev` pane (SAL_RUN), an agent

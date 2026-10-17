@@ -42,6 +42,7 @@ const resumableRoute = z.discriminatedUnion("name", [
   z.object({ name: z.literal("keys") }),
   z.object({ name: z.literal("projects") }),
   z.object({ name: z.literal("claude") }),
+  z.object({ name: z.literal("tabs"), snapshot: z.string().optional() }),
 ]);
 export type ResumableRoute = z.infer<typeof resumableRoute>;
 export const RESUMABLE = new Set<string>(resumableRoute.options.map((o) => o.shape.name.value));
@@ -87,6 +88,7 @@ const LABELS: Record<ResumableRoute["name"], string> = {
   keys: "keys",
   projects: "projects",
   claude: "claude usage",
+  tabs: "tabs",
 };
 
 export function screenLabel(route: ResumableRoute): string {

@@ -19,4 +19,5 @@ export type Route =
   | { name: "keys"; rotate?: { fingerprint?: string; dead?: boolean; simulate?: boolean } }
   | { name: "projects" }
   | { name: "claude" }
+  | { name: "tabs"; snapshot?: string }
   | { name: "review"; scope?: ReviewScope; autoStart?: boolean };

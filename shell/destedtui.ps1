@@ -9,6 +9,8 @@
 #   ports          every node/bun server listening on localhost — open, cd, kill
 #   procs          what every claude session spun up — cpu, orphans, kill
 #   bxtop          every bx browser daemon — activity, memory growth, orphans
+#   save-sessions <name>     tabs save <name>: snapshot this Windows Terminal window's tabs
+#   restore-sessions [name]  tabs restore [name]: tick tabs, reopen them in this window
 #   auto-launch    the picker opens by itself when a new shell starts in the
 #                  projects root (that's Windows Terminal's startingDirectory)
 #
@@ -97,6 +99,23 @@ function bxtop {
         return
     }
     destedtui --bx @args
+}
+
+# Named snapshots of this Windows Terminal window's tabs (the `tabs` bin,
+# features/tabs.md): save before a reboot, restore after.
+function save-sessions {
+    if (-not (Get-Command tabs -ErrorAction SilentlyContinue)) {
+        Write-Warning "tabs is not on PATH - run 'bun link' in G:\code\destedtui"
+        return
+    }
+    tabs save @args
+}
+function restore-sessions {
+    if (-not (Get-Command tabs -ErrorAction SilentlyContinue)) {
+        Write-Warning "tabs is not on PATH - run 'bun link' in G:\code\destedtui"
+        return
+    }
+    tabs restore @args
 }
 
 function Test-DestedTuiAutostart {

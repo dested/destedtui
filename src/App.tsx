@@ -22,6 +22,7 @@ import { Projects } from "./screens/Projects.tsx";
 import { Review } from "./screens/Review.tsx";
 import { Keys } from "./screens/Keys.tsx";
 import { ClaudeUsage } from "./screens/ClaudeUsage.tsx";
+import { Tabs } from "./screens/Tabs.tsx";
 import { projectsRoot, recordProjectOpen } from "./lib/projects.ts";
 import { announceCd, announceRun, emitCd } from "./lib/cd.ts";
 import { isBusy, watchIdle } from "./lib/idle.ts";
@@ -51,6 +52,8 @@ export function App({
     // The project picker launched from the shell is the whole app — nothing to
     // go "back" to, so esc must quit rather than drop you in the menu.
     if (initialRoute.name === "projects") return [initialRoute];
+    // Same for the `tabs` bin: it's its own app, esc from its list quits.
+    if (initialRoute.name === "tabs") return [initialRoute];
     return [{ name: "menu" }, initialRoute];
   });
   const [discovery, setDiscovery] = useState<Discovery | null>(null);
@@ -59,7 +62,7 @@ export function App({
     // The shell-launched picker never leaves the projects screen, so scanning
     // the cwd for scripts/databases there is wasted work (it used to freeze
     // the freshly painted UI for seconds on a big directory).
-    if (initialRoute.name === "projects") return;
+    if (initialRoute.name === "projects" || initialRoute.name === "tabs") return;
     let stale = false;
     discover(cwd).then((d) => {
       if (!stale) setDiscovery(d);
@@ -124,6 +127,14 @@ export function App({
     process.exit(0);
   };
 
+  /** A screen whose job ends in one action (tabs restore) leaves with a line on the prompt. */
+  const exitWith = (message: string) => {
+    killAll();
+    renderer.destroy();
+    console.log(message);
+    process.exit(0);
+  };
+
   /** Picking a project ends the session: we exist only to hand a path back. */
   const chooseProject = (dir: string, command?: string) => {
     recordProjectOpen(dir);
@@ -172,6 +183,7 @@ export function App({
       {route.name === "bx" && <Bx log={route.log} profiles={() => go({ name: "bxProfiles" })} back={stack.length > 1 ? back : quit} />}
       {route.name === "bxProfiles" && <BxProfiles back={stack.length > 1 ? back : quit} />}
       {route.name === "keys" && <Keys cwd={cwd} rotate={route.rotate} back={stack.length > 1 ? back : quit} />}
+      {route.name === "tabs" && <Tabs snapshot={route.snapshot} back={stack.length > 1 ? back : quit} exit={exitWith} />}
       {route.name === "claude" && <ClaudeUsage choose={chooseProject} back={stack.length > 1 ? back : quit} />}
       {route.name === "review" && (
         <Review cwd={cwd} scope={route.scope} autoStart={route.autoStart} back={stack.length > 1 ? back : quit} />
