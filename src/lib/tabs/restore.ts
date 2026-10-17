@@ -87,11 +87,25 @@ export function quoteArg(a: string): string {
   return a === "" || /[\s"]/.test(a) ? `"${a.replace(/(\\*)"/g, '$1$1\\"').replace(/(\\+)$/, "$1$1")}"` : a;
 }
 
+/** The packaged wt.exe. Bun.spawn can't launch the WindowsApps app-execution alias
+ * (it reports "Executable not found" even by full path), so ask Appx where Terminal lives. */
+async function wtExe(): Promise<string> {
+  const p = Bun.spawn(["pwsh", "-NoProfile", "-Command", "(Get-AppxPackage Microsoft.WindowsTerminal).InstallLocation"], {
+    stdin: "ignore", stdout: "pipe", stderr: "ignore", windowsHide: true,
+  });
+  const dir = (await new Response(p.stdout).text()).trim().split(/\r?\n/)[0] ?? "";
+  if (dir) {
+    const exe = `${dir}\\wt.exe`;
+    if (await Bun.file(exe).exists()) return exe;
+  }
+  return "wt.exe";
+}
+
 /** Open the tabs. Resolves once wt.exe has taken the request (it exits right away). */
 export async function runWt(args: string[]): Promise<{ ok: boolean; error: string | null }> {
   if (process.platform !== "win32") return { ok: false, error: "restore runs on Windows (the Linux bin forwards to tabs.exe)" };
   try {
-    const p = Bun.spawn(["wt.exe", ...args], { stdin: "ignore", stdout: "ignore", stderr: "pipe" });
+    const p = Bun.spawn([await wtExe(), ...args], { stdin: "ignore", stdout: "ignore", stderr: "pipe" });
     const [err, code] = await Promise.all([new Response(p.stderr).text(), p.exited]);
     return code === 0 ? { ok: true, error: null } : { ok: false, error: `wt.exe exited ${code}${err.trim() ? `: ${err.trim()}` : ""}` };
   } catch (err) {
