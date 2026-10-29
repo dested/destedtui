@@ -1,17 +1,17 @@
 # destedtui — CliffNotes
 
 > Living map of the project. Read this before any coding session.
-> Last updated: 2026-10-14.
+> Last updated: 2026-10-28.
 
 ## What this is
 
-Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that lists everything in `g:\code` ranked by how often you open it, fuzzy-filters it, carries your saved command shortcuts, and `cd`s the shell there — it auto-launches in every new terminal that starts in `g:\code`; (2) `cd` into any project and run `destedtui` for per-project utilities — a monorepo-aware package.json script runner and Postgres backup/restore driven by `.env` `DATABASE_URL`s (pg client tools auto-downloaded per server major version so dumps are never version-mismatched); (3) a second global bin, **`review`** — a clean-context code review of the current repo by a fresh headless `claude-opus-4-8` process, with scope picking (uncommitted/staged/commits/branch/PR), a streaming activity feed, and a gated in-TUI commit. See [features/review.md](features/review.md); (4) a third global bin, **`keys`** — a DPAPI-encrypted vault for every AI API key, one per project per provider, minted through provider admin APIs where they exist and written into each project's `.env`. See [features/keys.md](features/keys.md); (5) **Claude usage** — what every project cost in Claude Code (API-equivalent), when you worked on it, every session, from the transcripts in `~/.claude/projects`. See [features/claude-usage.md](features/claude-usage.md).
+Personal dev-project TUI for dested. Six jobs: (1) a **project picker** that lists everything in `g:\code` ranked by how often you open it, fuzzy-filters it, carries your saved command shortcuts, and `cd`s the shell there — it auto-launches in every new terminal that starts in `g:\code`; (2) `cd` into any project and run `destedtui` for per-project utilities — a monorepo-aware package.json script runner and Postgres backup/restore driven by `.env` `DATABASE_URL`s (pg client tools auto-downloaded per server major version so dumps are never version-mismatched); (3) a second global bin, **`review`** — a clean-context code review of the current repo by a fresh headless `claude-opus-4-8` process, with scope picking (uncommitted/staged/commits/branch/PR), a streaming activity feed, and a gated in-TUI commit. See [features/review.md](features/review.md); (4) a third global bin, **`keys`** — a DPAPI-encrypted vault for every AI API key, one per project per provider, minted through provider admin APIs where they exist and written into each project's `.env`. See [features/keys.md](features/keys.md); (5) **Claude usage** — what every project cost in Claude Code (API-equivalent), when you worked on it, every session, from the transcripts in `~/.claude/projects` on both sides of WSL. See [features/claude-usage.md](features/claude-usage.md); (6) a fourth global bin, **`tabs`** — named snapshots of one Windows Terminal window's tabs (which Claude session, shell or app each runs, Windows or WSL), reopened later in the current window with one `wt` call. See [features/tabs.md](features/tabs.md).
 
 ## Quick Reference
 
 - **Run:** `bun run dev` in this repo, or `destedtui` anywhere (globally linked via `bun link`)
 - **Entry point:** global bin `bin/destedtui.mjs` (Node launcher) → `bun src/index.tsx` → arg parsing → `bootTui` (`src/tui.tsx`) → `<App/>`. `bun run dev` skips the launcher (no idle pause)
-- **Idle pause:** every bin's TUI (`destedtui`, `keys`, `review`) runs as a child of `bin/launch.mjs`. After 60s with no input and nothing live, the child saves its screen stack and exits, so all its memory goes back to Windows. `bin/paused.mjs` then shows "paused, click to resume", and a click starts a fresh child on the same screens. The shell-launched picker just exits to the prompt instead. `DESTEDTUI_IDLE_MS` overrides the timeout (0 = off)
+- **Idle pause:** every bin's TUI (`destedtui`, `keys`, `review`, `tabs`) runs as a child of `bin/launch.mjs`. After 60s with no input and nothing live, the child saves its screen stack and exits, so all its memory goes back to Windows. `bin/paused.mjs` then shows "paused, click to resume", and a click starts a fresh child on the same screens. The shell-launched picker just exits to the prompt instead. `DESTEDTUI_IDLE_MS` overrides the timeout (0 = off)
 - **Platforms:** Windows (native) and Linux in the `sal` WSL distro, one codebase branching on `process.platform` (`lib/platform.ts`: `IS_WIN`/`IS_LINUX`, `isWsl()`, `winHome()`, `winBin()`, and the `W:\x` ↔ `/w/x` / `\\wsl.localhost\sal\x` ↔ `/x` path rules). Modules that are mostly OS calls have a `*.linux.ts` sibling behind the same API (`lib/ports.linux.ts`, `lib/proc.linux.ts`). Linux differences:
   - projects root `/w/code`; config `/home/dested/.destedtui/config.json`, its own file, seeded once (`commands`, `localhost`, `projectOpens` re-keyed to `/w/code/<name>`) from `/mnt/c/Users/dested/.destedtui/config.json`
   - ports/procs read `/proc` (`/proc/net/tcp{,6}` + fd inodes); kill = SIGTERM to the process group/session/descendants, then SIGKILL after 2s from a detached `sh` reaper (`posixTreeKill`); scripts run `/bin/sh -c` in their own session (`detached`)
@@ -25,6 +25,7 @@ Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that li
 - **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--procs`, `--bx` (+ `--log`), `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys`, `--claude` (jump straight to a screen), `--usage` (print Claude usage, `--days`/`--project`/`--json`), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
 - **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set`/`usage`/`push`/`drydock`/`rotate --dry-run` for Claude sessions (the `keys` skill, source `skill/keys/`). `reveal`/`copy` for a value (never printed inside Claude Code); values never on argv. Exit 0 ok / 1 user error / 2 provider API error
+- **Fourth bin — `tabs`:** `save <name>` (non-interactive, prints the captured table), `restore [name]` (TUI; `--all` / `--dry-run` skip it), `list`/`show <name> [--json]`/`rm <name>`; no args = the TUI. Snapshots in `G:\code\sals-powershell-setup\claude\sessions\<name>.json` (gitignored there; `TABS_DIR` overrides). Windows only underneath; the Linux bin forwards to `tabs.exe` with `TABS_SELF_TTY`. Shell: `save-sessions` / `restore-sessions` (pwsh + zsh)
 - **Terminal multiplexer (`term`):** interactive shells & `claude` sessions in panes; PTYs run in a **Node sidecar** (`ptyhost/host.mjs`) because Bun can't drive Windows ConPTY. Needs `node` on PATH.
 - **Shell integration:** `destedtui --install-shell` → `shell/install.ps1` adds a marked block to the real `$PROFILE` that dot-sources `shell/destedtui.ps1` (`proj`/`pj` + auto-launch, `dested` = the bin under a short name, `term` = jump into the multiplexer here, `ports` = the localhost screen; `proj` and `ports` share the `Invoke-DestedTuiCd` cd handoff). **zsh (WSL):** `--install-shell` writes a `# >>> destedtui >>>` block into `~/.zshrc.local` (never `~/.zshrc`, a symlink into sals-powershell-setup) that sources `shell/destedtui.zsh`: `proj`/`pj`, `dested`, `term`, `ports`, `procs` (shared `_destedtui_cd` handoff) and autostart only for an interactive tty zsh started exactly in the projects root with `DESTEDTUI_NO_AUTOSTART`, `SAL_RUN`, `CLAUDECODE`, `CI` unset and no `-c` command
 - **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. On Linux the same `OsLayer` reads `/proc` (`lib/ports.linux.ts`, ~15ms). `--ports --json` prints one scan with page titles as versioned JSON (`lib/ports-json.ts`), read by sal-agent's https://sal.localhost/ports; add fields, never rename them (top-level `platform` says which side scanned)
@@ -33,7 +34,7 @@ Personal dev-project TUI for dested. Five jobs: (1) a **project picker** that li
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
 - **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock` + `usage.json` (usage cache, no secrets, 15-min freshness) + `drydock.json` (Drydock apps → folders, env as var → fingerprint, 15-min freshness); `KEYS_VAULT_DIR` overrides the folder; `DRYDOCK_URL` overrides the portal (`http://localhost:4400/trpc`)
-- **Claude usage cache:** `~/.destedtui/claude-usage.json` (~16 MB, per-transcript offsets + per-message token tuples, no $); `CLAUDE_PROJECTS_DIR` overrides the transcript folder
+- **Claude usage cache:** `~/.destedtui/claude-usage.json` (~16 MB, per-transcript offsets + per-message token tuples, no $); one cache per side, each over both sides' transcript folders; `CLAUDE_PROJECTS_DIR` replaces them with one folder
 
 ## Stack
 
@@ -55,6 +56,7 @@ bin/                    the global bins (package.json `bin`). Node, not Bun; re-
   launch.mjs            the launcher: runs `bun src/<entry>` as a child and passes its exit code through; exit 75 = paused → paused.mjs → respawn with the resume file
   paused.mjs            the paused screen in raw ANSI (palette mirrored from theme.ts): where it was, what it gave back, ▶ resume / ✕ quit
   destedtui.mjs / keys.mjs / review.mjs   3-line `launch("src/<entry>.tsx")`
+  tabs.mjs              same, but in WSL it forwards to tabs.exe with its pts in TABS_SELF_TTY
 skill/
   keys/SKILL.md         the `keys` Claude skill; junctioned into ~/.claude/skills/keys (sals-powershell-setup install.ps1 `$externalSkills`)
 prompts/
@@ -65,11 +67,16 @@ ptyhost/
 shell/
   destedtui.ps1         `proj`/`pj` + `ports` (shared `Invoke-DestedTuiCd` temp-file cd handoff) + autostart guard + `dested` alias + `term` / `procs` / `bxtop` fns
   install.ps1           idempotent marked block into the real $PROFILE (-Uninstall removes it)
-  destedtui.zsh         the zsh twin for WSL: `proj`/`pj`/`ports`/`procs` (`_destedtui_cd`), `dested`, `term`, `_destedtui_autostart` (LF-only: .gitattributes)
+  destedtui.zsh         the zsh twin for WSL: `proj`/`pj`/`ports`/`procs` (`_destedtui_cd`), `dested`, `term`, `save-sessions`/`restore-sessions` (`~/.bun/bin/tabs` by path), `_destedtui_autostart` (LF-only: .gitattributes)
+scripts/
+  snap-claude.tsx / snap-keys.tsx   headless frames of the screens (opentui's test renderer)
+  tabs-uia.ps1          Windows Terminal tab titles per window via UI Automation, JSON (`tabs`)
+  tabs-console.ps1      read/set other consoles' titles (FreeConsole → AttachConsole), JSON over stdio (`tabs`)
 src/
   index.tsx             CLI entry: --help/--version/--projects/--backup/--restore/--local/--pull/--review/--install-shell (Linux: zsh installer; --startup/--bx refused, --keys forwarded)
   review.tsx            the `review` bin: scope flags, --headless path, or boots the TUI on the review route
   keys.tsx              the `keys` bin: the vault CLI, or boots the TUI on the keys route
+  tabs.tsx              the `tabs` bin: save/list/show/rm/restore --all|--dry-run, or boots the TUI on the tabs route
   tui.tsx               bootTui: createCliRenderer + <App/>; reads the resume stack when the launcher resumes us
   App.tsx               Route stack (push/pop), discovery kickoff, chooseProject (cd + exit), global ctrl+c quit, the idle pause (writes the resume file, exits 75)
   routes.ts             Route union type (backup/restore carry optional presets)
@@ -106,6 +113,7 @@ src/
     KeysUsage.tsx       the Keys screen's Usage view (`u`): spend per owner, hottest first, sparklines, per-key detail strip
     ClaudeUsage.tsx     claude code usage: tabs 1 projects / 2 timeline (project × day heatmap) / 3 sessions (▶ resume) / 4 days, range chips, detail strip
     KeysRotate.tsx      the rotate screen (`R`): shared keys → overview/plan → confirmed walk → revoke; dead-key batch (`d`); --simulate
+    Tabs.tsx            tabs: snapshot list → tab list (2-line rows with a tick box; apps off by default) → one wt call, exits
   lib/
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all, opt-in auto-start: config `startupAuto`)
     platform.ts         Windows ↔ WSL: IS_WIN/IS_LINUX, isWsl, winHome, wslHome, winBin, WIN_WSL_ROOT, normalizeWslUnc (`\\wsl.localhost\sal\w\x` → `W:\x`), winToLinux (`W:\x` → `/w/x`), linuxToWin (`/w/x` → `W:\x`)
@@ -157,6 +165,13 @@ src/
       importer.ts       scan each project folder's .env* files (2 levels, SKIP_DIRS) and classify vars → providers
       errors.ts         UserError (exit 1) / ProviderError (exit 2)
       usage/            per-provider usage fetchers (openai, anthropic, elevenlabs, openrouter, fal, xai) + cache.ts (usage.json) + view.ts (owners, 24h≈, sparkline) + index.ts (registry, fetchUsage/getUsage)
+    tabs/
+      store.ts          zod SnapshotSchema (version 1) + read/write/list/rm in TABS_DIR
+      capture.ts        `tabs save`: foreground WT window (bun:ffi user32), pane roots, stamp/read/restore titles, map tab → claude/shell/app
+      wsl.ts            one wsl.exe probe: pts shells + foreground + session files, OSC 0 stamps; setWslTitles; shellJoin (no `"` / `;`)
+      transcript.ts     transcript path (Windows or \\wsl.localhost) + lastPrompt from the file tail
+      restore.ts        restoreRows (defaults, transcript missing), tabArgs/wtArgs (`;` → `\;`), runWt
+      format.ts         savedLabel / kindCounts, shared by the CLI and the screen
 ```
 
 ## File map (concept → path)
@@ -191,6 +206,10 @@ src/
 | Add a provider that can mint | one file in `src/lib/keys/adapters/` + a line in `adapters/index.ts` + `mint:` on the provider in `providers.ts` |
 | Which env var names map to a provider on import | `aliases`/`prefixes` in `src/lib/keys/providers.ts` + `classify` in `importer.ts` |
 | A second CLI name for a provider (`jev` → `typesafe`) | `PROVIDER_ID_ALIASES` in `src/lib/keys/providers.ts` (read by `getProvider`/`viewKeys` in `ops.ts`) |
+| Tab snapshots (`tabs save/restore`, `save-sessions`) | `src/tabs.tsx` (bin) + `src/lib/tabs/` + `src/screens/Tabs.tsx` — spec in `features/tabs.md` |
+| Which pane is which Windows Terminal tab | `capture` in `src/lib/tabs/capture.ts` (title stamps) + `scripts/tabs-uia.ps1` / `scripts/tabs-console.ps1` + `PROBE` in `src/lib/tabs/wsl.ts` |
+| The `wt` command a restore runs | `tabArgs` / `wtArgs` in `src/lib/tabs/restore.ts`; `tabs restore <name> --dry-run` prints it |
+| Headless frames of the tabs screens | `TABS_DIR=<scratch> bun scripts/snap-claude.tsx --route tabs [--snapshot <name>] --keys "snap down snap"` |
 | The localhost / port killer screen | `src/screens/Ports.tsx` (UI) + `src/lib/ports.ts` (scan, probe, kill) |
 | What `x` kills on the localhost screen | `findKillRoot` + `isLauncher` in `lib/ports.ts` — climbs node/bun/`cmd /c` parents, never into this tui's ancestry, a shell, or a claude process |
 | Reading another process's cwd / command line | `inspect` in `lib/ports.ts` (PEB offsets, x64) |
@@ -252,6 +271,7 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 | `ProjectInfo` / `ProjectDetail` / `SortMode` | `lib/projects.ts` | picker rows, git pane, sort cycling |
 | `ReviewScope` / `ReviewResult` / `ReviewOutcome` | `lib/review.ts` | review scope union, the reviewer's zod-parsed output, verdict+cost |
 | `Vault` / `KeyRecord` / `Provider` / `AdminCredential` | `lib/keys/vault.ts` | zod-validated vault contents (values inside — never render them) |
+| `Snapshot` / `SavedTab` (claude \| shell \| app) | `lib/tabs/store.ts` | one saved Windows Terminal window, zod, `version: 1` |
 | `KeyView` | `lib/keys/ops.ts` | value-free key row every list/screen/`--json` uses |
 | `MintAdapter` | `lib/keys/adapters/types.ts` | one provider's admin API: mint / revoke / locate |
 | `UsageCache` / `FileEntry` | `lib/claude/scan.ts` | the transcript cache (zod) |
@@ -287,6 +307,7 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Review output is judged against a raw Claude session** on the same diff (features/review.md "Quality bar"): coverage + merge/deploy notes matter as much as peak findings, and the TUI must never truncate model output. Re-benchmark after material prompt changes.
 - **Driving the TUI from Git Bash + tmux: `export MSYS_NO_PATHCONV=1` first.** MSYS rewrites a bare `/` argument to `C:/Program Files/Git/`, so `tmux send-keys '/'` types those letters into the app (on the localhost screen `o` opened Chrome and `g` cd'd away). Never send keys to a TUI session you can't see — tear down with `tmux kill-session`; two queued `Escape`s can coalesce and leave the app reading your next shell line as hotkeys.
 - **Never `TextDecoder("utf-16le")` on a polling path.** In Bun 1.3.10 on Windows its `decode()` leaks ~670 B of native commit per call (shared or fresh decoder alike; the JS heap stays flat). The process scanner decoded every process name every 2s, so ~350 KB/scan and ~0.6 GB/h per open Ports/Procs/bx screen. `utf16()` in `lib/ports.ts` goes through `Buffer.toString("utf16le")`, measured flat. See plans/2026-10-07-memory-leak.md.
+- **Never re-render a big subtree on a timer.** With opentui 0.4.3 / Bun 1.3.10 on Windows every React commit of a sizeable subtree grows native commit, changed or not (the startup rail: ~45 KB/commit, JS heap flat). A screen-level 100 ms spinner tick in `Startup.tsx` reached 19 GB in a day. Put spinners and clocks in leaf components that own their tick (`useTick` in `Startup.tsx`) and memo the rest. Ports/Procs/Bx/Keys/ClaudeUsage still tick at the screen level (120 ms): same risk while one is left open.
 - **bx's /debug is a contract with this repo.** `lib/bx.ts` mirrors it with zod; bx keeps it additive. A daemon that 404s /debug is an "old daemon" (predates 2026-10-08) and only shows process-scan numbers.
 - **The leak metric is private commit, not working set.** A leaking process gets trimmed to the pagefile, so its working set looks fine while commit climbs (the 68 GB incident had a 2.8 GB working set). The bx screen defaults to commit; `m` flips to working set.
 - **The localhost scanner's PEB offsets are x64** (`ProcessParameters` @0x20, `CurrentDirectory` @0x38, `CommandLine` @0x70). A 32-bit target would need the WOW64 PEB; node/bun are 64-bit, and a failed read just leaves cwd empty (row shows `·`). Processes owned by SYSTEM/other users can't be opened — same empty result, by design.
@@ -308,6 +329,8 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Linux claude is a version-named binary** (`~/.local/share/claude/versions/<ver>`, via `~/.local/bin/claude`), so an exe basename like `2.1.296` falls back to `comm` (`claude`). It's not on PATH in `zsh -lc` (only the interactive zshrc adds it): `claudeExe()` in `lib/review.ts` falls back to `~/.local/bin/claude`.
 - **Driving `wsl.exe` from Git Bash: `export MSYS_NO_PATHCONV=1`**, and never put a `\\` inside a Bash heredoc that writes source (it arrives as one `\`). Write backslash strings with the Edit tool.
 - **Never name a bin flag `--env-file`.** Node 22 honors `--env-file` anywhere on argv, even after the script, so the Node launcher dies (`node: <file>: not found`) or silently loads that file into its env. `keys` takes `--env`.
+- **`tabs save` retitles every pane of every Windows Terminal window for about a second.** Whatever fails, the `finally` in `capture` puts titles back: each pane root's console gets its exact prior title (read before anything is stamped), and pts never seen on a tab get an empty OSC title. Never add an early return between the stamps and that block. A tab Sal renamed ignores app titles, so it can't be mapped (it's reported, not guessed).
+- **`wt` splits its whole command line on `;`.** Every argument goes through `wtArgs` (`;` → `\;`); pwsh commands holding `"`/`` ` ``/`;` go as `-EncodedCommand`; WSL `SAL_RUN` commands come from `shellJoin`, which never emits `"` or `;`, because WT re-quotes args with spaces and wsl.exe parses them again.
 - A `.git` folder's own mtime is worthless as "last touched" (any passing `git status` bumps it, so all 221 repos read as "just now"); `.git/logs/HEAD` is the honest signal.
 
 ## Status
@@ -322,5 +345,6 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Done** [bx daemons](features/bx.md) — live monitor of every bx daemon over its `/debug` endpoint; `--bx`, `bxtop`, menu tile. Frames verified headless at 200×48/200×40/200×30/140×24/100×30; stop, orphan kill, gc and heap snapshot exercised against live daemons.
 - **Done** Idle pause (2026-10-10): launcher, paused screen and resume, ~35 MB while paused. Verified in tmux: pause → click resume → pause → `q` quits (exit 0, nothing left over); the picker exits quietly; review and an open term pane never pause.
 - **Done** WSL (2026-10-13): everything but startup/bx runs natively in the `sal` distro; keys bridges to `keys.exe`; startup/bx tiles hand over to `destedtui.exe`. Verified per `verify.md` § Linux / WSL. Not wired into the real zshrc yet (the lead does that at publish).
+- **Done** [Tabs](features/tabs.md) (2026-10-16) — `tabs` bin + TUI + `save-sessions`/`restore-sessions`. Save verified against Sal's live 18-tab window (15 mapped to the right sessions, own tab and 2 renamed tabs reported, every title back afterwards), also through the WSL bridge; `--dry-run` argv checked; TUI frames headless. A real restore (opening tabs) not run.
 - **Not built** (menu shows "coming soon"): Git dashboard, .env inspector, node_modules nuker
 - **Next:** whichever coming-soon tile the user picks

@@ -7,6 +7,7 @@ import { Footer, type Hint } from "../components/Footer.tsx";
 import { ActionBar, btn, seg, type BarItem } from "../components/ActionBar.tsx";
 import { fit, pad } from "../lib/text.ts";
 import { projectsRoot } from "../lib/projects.ts";
+import { localPath } from "../lib/platform.ts";
 import { sparkline } from "../lib/keys/usage/view.ts";
 import { readCache, workerMsgSchema, type ScanProgress } from "../lib/claude/scan.ts";
 import {
@@ -15,6 +16,7 @@ import {
   load,
   rangeLabel,
   RANGES,
+  resumeCommand,
   summarize,
   tok,
   tokenBreakdown,
@@ -240,7 +242,7 @@ export function ClaudeUsage({ back, choose }: Props) {
     const root = join(projectsRoot(), name);
     if (existsSync(root)) return root;
     const latest = summary?.sessions.find((s) => s.project === name);
-    return latest && existsSync(latest.cwd) ? latest.cwd : null;
+    return latest && existsSync(localPath(latest.cwd)) ? localPath(latest.cwd) : null;
   };
   const cdProject = (name: string | undefined) => {
     if (!name) return;
@@ -250,8 +252,9 @@ export function ClaudeUsage({ back, choose }: Props) {
   };
   const resume = (s: SessionRow | undefined) => {
     if (!s) return;
-    if (!existsSync(s.cwd)) return setFlash({ text: `✗ ${s.cwd} no longer exists`, color: T.red });
-    choose(s.cwd, `claude --resume ${s.id}`);
+    const dir = localPath(s.cwd);
+    if (!existsSync(dir)) return setFlash({ text: `✗ ${s.cwd} no longer exists`, color: T.red });
+    choose(dir, resumeCommand(s.id, s.cwd));
   };
   const showSessions = (f: SessionFilter) => {
     setFilter(f);

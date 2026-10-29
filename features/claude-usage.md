@@ -4,7 +4,9 @@
 
 ## What it does
 
-Reads every Claude Code transcript under `~/.claude/projects` and shows what each
+Reads every Claude Code transcript under `~/.claude/projects`, on both sides of WSL
+(Windows reads the `sal` distro's through `\wsl.localhost\sal\home\dested`, WSL reads
+Windows' through `/mnt/c/Users/dested`), and shows what each
 project cost, when you worked on it, and every session. Dollars are **API-equivalent
 list prices**: a Max plan isn't billed per token, so the figure is what the API would
 have charged. Tokens are always shown next to it.
@@ -31,7 +33,8 @@ for Claude sessions and scripts.
 offset of its last complete line, session id, cwd, branch, AI title, prompt count,
 sorted activity minutes, and one flat 9-number tuple per API message
 (`[hash, ts, model, input, output, cacheRead, cacheWrite5m, cacheWrite1h, fast]`).
-No dollar figures are stored. `CLAUDE_PROJECTS_DIR` overrides the source folder.
+No dollar figures are stored. Each side keeps its own cache over both folders
+(`CLAUDE_PROJECT_DIRS` in `scan.ts`). `CLAUDE_PROJECTS_DIR` replaces both with one folder.
 
 ## Behavior spec
 
@@ -51,8 +54,9 @@ No dollar figures are stored. `CLAUDE_PROJECTS_DIR` overrides the source folder.
 - **Price** = input × in + output × out + cache read × the model's read rate + 5-minute
   writes × 1.25 in + 1-hour writes × 2 in, all ×2 in fast mode. Unknown models are priced
   as the newest of their family, and the status line names them. `<synthetic>` costs $0.
-- **Project** = the top-level `projectsRoot()` folder of the session's cwd (monorepo
-  subfolders and worktrees roll up). A cwd inside a session scratchpad
+- **Project** = the top-level folder of the session's cwd under any spelling of the
+  projects root (`W:\code`, `G:\code`, `/w/code`, `/mnt/g/code`), so a project is one row
+  whichever side ran it (monorepo subfolders and worktrees roll up). Both homes are `~`. A cwd inside a session scratchpad
   (`…/Temp/claude/G--code-sigil/…`) maps back to the project its slug names. `G:\code`
   itself shows as `G:\code`, the home folder as `~`, and anything else as its path.
   A subagent's spend counts toward its parent session's project.
@@ -77,7 +81,9 @@ No dollar figures are stored. `CLAUDE_PROJECTS_DIR` overrides the source folder.
   title, cost, tokens and subagent count. `⌕ filter` types a filter by title, project or
   id prefix; `✕ clear filter` drops it and any drill-down scope (project, day or week).
   The row's `▶` (or enter) resumes it: the TUI quits, cds to the session's cwd and runs
-  `claude --resume <id>`. esc clears a filter before it leaves the screen.
+  `claude --resume <id>` on the side that recorded it (`resumeCommand` in `view.ts`: from
+  Windows a WSL session goes through `wsl.exe -d sal --cd`, from WSL a Windows one through
+  `pwsh.exe`). esc clears a filter before it leaves the screen.
 - **4 days**: newest first, with cost, active time, sessions, tokens and projects by
   cost; the detail strip lists every project with its active time. A row click shows that
   day's sessions.

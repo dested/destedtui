@@ -9,8 +9,9 @@
  * IDLE_MIN, unioned across sessions so parallel sessions don't double-count.
  */
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, sep } from "node:path";
+import { homedir, userInfo } from "node:os";
+import { join } from "node:path";
+import { IS_WIN, WSL_DISTRO } from "../platform.ts";
 import { projectsRoot } from "../projects.ts";
 import { costOf, ratesFor, shortModel, type TokenCounts } from "./pricing.ts";
 import { F, STRIDE, type UsageCache } from "./scan.ts";
@@ -66,26 +67,61 @@ export function dayKey(sec: number): string {
   return key;
 }
 
-/** `G:\code\drydock\web` → `drydock`; `C:\Users\dested` → `~`; else the path itself. */
+const norm = (p: string) => p.replace(/[\\/]+/g, "/").replace(/\/+$/, "");
+
+/**
+ * Every spelling of the projects root a transcript can carry: this side's
+ * root, the same tree from the other side (`W:\code` ↔ `/w/code`), and the
+ * pre-WSL `G:\code`. A project is its folder name whichever side ran it.
+ */
+function projectRoots(): string[] {
+  return [...new Set([projectsRoot(), "W:/code", "G:/code", "/w/code", "/mnt/w/code", "/mnt/g/code"].map((r) => norm(r).toLowerCase()))];
+}
+
+/** Both homes, as either side records them. */
+function homes(): string[] {
+  const user = userInfo().username.toLowerCase();
+  return [...new Set([norm(homedir()).toLowerCase(), `c:/users/${user}`, `/mnt/c/users/${user}`, `/home/${user}`])];
+}
+
+/** `G:\code\drydock\web` or `/w/code/drydock/web` → `drydock`; either home → `~`; else the path itself. */
 export function projectOf(cwd: string): string {
-  const norm = (p: string) => p.replace(/[\\/]+/g, "/").replace(/\/+$/, "");
   const c = norm(cwd);
   const lc = c.toLowerCase();
   const rootRaw = projectsRoot();
-  const root = norm(rootRaw).toLowerCase();
-  if (lc.startsWith(`${root}/`)) return c.slice(root.length + 1).split("/")[0] ?? c;
-  if (lc === root) return rootRaw;
+  const roots = projectRoots();
+  for (const root of roots) {
+    if (lc.startsWith(`${root}/`)) return c.slice(root.length + 1).split("/")[0] ?? c;
+    if (lc === root) return rootRaw;
+  }
   // Claude spawned from inside a session's scratchpad (…/Temp/claude/G--code-sigil/<session>/…,
   // /tmp/claude-1000/-w-code-sigil/<session>/… on Linux) belongs to the project the slug names.
-  const slug = c.match(/\/(?:temp\/claude|tmp\/claude-\d+)\/([^/]+)\//i)?.[1];
+  const slug = c.match(/\/(?:temp\/claude|tmp\/claude-\d+)\/([^/]+)\//i)?.[1]?.toLowerCase();
   if (slug) {
-    const rootSlug = root.replace(/[:/]/g, "-");
-    if (slug.toLowerCase().startsWith(`${rootSlug}-`)) return slugProject(slug.slice(rootSlug.length + 1), rootRaw);
+    for (const root of roots) {
+      const rootSlug = root.replace(/[:/]/g, "-");
+      if (slug.startsWith(`${rootSlug}-`)) return slugProject(slug.slice(rootSlug.length + 1), rootRaw);
+    }
   }
-  const home = norm(homedir()).toLowerCase();
-  if (lc === home) return "~";
-  if (lc.startsWith(`${home}/`)) return `~/${c.slice(home.length + 1)}`;
-  return c.split("/").join(sep === "\\" ? "\\" : "/");
+  for (const home of homes()) {
+    if (lc === home) return "~";
+    if (lc.startsWith(`${home}/`)) return `~/${c.slice(home.length + 1)}`;
+  }
+  // Keep the side's own spelling: a Linux cwd stays `/x/y` on Windows.
+  return cwd.startsWith("/") ? c : c.split("/").join("\\");
+}
+
+/**
+ * The command that resumes a session on the side that recorded it — a
+ * transcript only exists in that side's ~/.claude. Windows → WSL session:
+ * `wsl.exe` into its cwd; WSL → Windows session: `pwsh.exe` into its cwd
+ * (interop would otherwise start it in a `\\wsl.localhost` path).
+ */
+export function resumeCommand(id: string, cwd: string): string {
+  const linuxSession = cwd.startsWith("/");
+  if (IS_WIN && linuxSession) return `wsl.exe -d ${WSL_DISTRO} --cd '${cwd}' --exec zsh -lic 'claude --resume ${id}'`;
+  if (!IS_WIN && !linuxSession) return `pwsh.exe -NoLogo -Command 'Set-Location -LiteralPath "${cwd}"; claude --resume ${id}'`;
+  return `claude --resume ${id}`;
 }
 
 const slugMemo = new Map<string, string>();

@@ -1,5 +1,7 @@
 /**
- * Reads every Claude Code transcript under ~/.claude/projects into a compact,
+ * Reads every Claude Code transcript under ~/.claude/projects — this side's and
+ * the other side's (the `sal` distro from Windows, the Windows home from WSL) —
+ * into a compact,
  * incrementally maintained cache (~/.destedtui/claude-usage.json).
  *
  * A transcript is append-only JSONL, so each file remembers the byte offset of
@@ -20,8 +22,15 @@ import { homedir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import { z } from "zod";
 import { CONFIG_DIR } from "../config.ts";
+import { IS_WIN, isWsl, winHome, wslHome } from "../platform.ts";
 
-export const CLAUDE_PROJECTS = process.env.CLAUDE_PROJECTS_DIR ?? join(homedir(), ".claude", "projects");
+/** Every transcript folder scanned. `CLAUDE_PROJECTS_DIR` replaces the lot with one folder. */
+export const CLAUDE_PROJECT_DIRS: string[] = process.env.CLAUDE_PROJECTS_DIR
+  ? [process.env.CLAUDE_PROJECTS_DIR]
+  : [
+      join(homedir(), ".claude", "projects"),
+      ...(IS_WIN ? [join(wslHome(), ".claude", "projects")] : isWsl() ? [join(winHome(), ".claude", "projects")] : []),
+    ];
 export const CACHE_PATH = join(CONFIG_DIR, "claude-usage.json");
 const CACHE_VERSION = 1;
 
@@ -276,7 +285,7 @@ export function scan(onProgress?: (p: ScanProgress) => void): UsageCache {
   const models = prev ? [...prev.models] : [];
   const modelIdx = new Map(models.map((m, i) => [m, i]));
   const files: Record<string, FileEntry> = {};
-  const paths = listTranscripts(CLAUDE_PROJECTS);
+  const paths = CLAUDE_PROJECT_DIRS.flatMap(listTranscripts);
   const progress: ScanProgress = { done: 0, total: paths.length, read: 0, bytes: 0 };
   let changed = !prev;
   let lastTick = 0;

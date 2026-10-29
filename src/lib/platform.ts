@@ -69,3 +69,23 @@ export function linuxToWin(p: string): string {
   if (mnt?.[1]) return `${mnt[1].toUpperCase()}:\\${(mnt[2] ?? "").replace(/\//g, "\\")}`;
   return `\\\\wsl.localhost\\${WSL_DISTRO}${p.replace(/\//g, "\\")}`;
 }
+
+/**
+ * A path recorded on either side, as this side opens it. Windows: `/w/x` →
+ * `W:\x`, `/mnt/c/x` → `C:\x`, any other `/x` → `\\wsl.localhost\sal\x`.
+ * Linux: `W:\x` → `/w/x`, `C:\x` → `/mnt/c/x`. Native paths come back untouched.
+ */
+export function localPath(p: string): string {
+  if (IS_WIN) {
+    if (!p.startsWith("/")) return p;
+    const mnt = /^\/mnt\/([a-z])(?:\/(.*))?$/i.exec(p);
+    if (mnt) return `${(mnt[1] ?? "").toUpperCase()}:\\${(mnt[2] ?? "").replace(/\//g, "\\")}`;
+    if (p === "/w" || p.startsWith("/w/")) return `W:${p.slice(2).replace(/\//g, "\\") || "\\"}`;
+    return `\\\\wsl.localhost\\${WSL_DISTRO}${p.replace(/\//g, "\\")}`;
+  }
+  const inDistro = winToLinux(p);
+  if (inDistro) return inDistro;
+  const drive = /^([A-Za-z]):(?:[\\/](.*))?$/.exec(p);
+  if (drive) return `/mnt/${(drive[1] ?? "").toLowerCase()}/${(drive[2] ?? "").replace(/\\/g, "/")}`.replace(/\/+$/, "");
+  return p;
+}
