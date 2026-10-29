@@ -126,6 +126,7 @@ src/
       jobs.ts           `jobs` singleton: dev/prisma/studio/tunnel, ready by port or line, scrubbed output; W:\ jobs run through inDistro
       servers.ts        ProjectServer (Windows unit or WSL listener), projectServers, wslServers (the distro's `--ports --json`), killServer
       inspect.ts        staticPicture, envFiles (names only), devCommands, recentCommits
+      devport.ts        devTarget: where a dev script will serve (portless name, --port, project.json, .env PORT, source default, metro/vite defaults) and which file said so
       picture.ts        gather + toJson (v1 contract for `--project --json`)
       cli.ts            projectFromArgs, runProjectJson
       usage.ts          claude spend for one project, via usageWorker.ts

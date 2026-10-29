@@ -16,7 +16,17 @@ One screen per project with everything you can do there, modelled on the old Dec
   - `your shell`;
   - `wsl`.
 
-  Rows show port, page title, command, owner, uptime and memory, with ↗ open and a two-press ✕ kill (tree kill on Windows; `pkill -P` + `kill` TERM inside WSL). The scan runs every 2 s. `▶ <dev command>` buttons start the project's dev scripts as panel jobs, and pressing one again stops it.
+  Rows show port, page title, command, owner, uptime and memory, with ↗ open and a two-press ✕ kill (tree kill on Windows; `pkill -P` + `kill` TERM inside WSL). The scan runs every 2 s. `▶ <dev command> :4747` buttons start the project's dev scripts as panel jobs, and pressing one again stops it.
+- **Where a dev command will serve** (`devTarget` in `lib/project/devport.ts`, first hit wins):
+  1. portless (the script or the file it runs calls portless; name from `portless <name>`, `portless.json` or `jig.json`) → `https://<name>.localhost`;
+  2. `--port N` / `-p N` / `PORT=N` in the script;
+  3. sal-starter's `project.json` (`apiPort`; `metroPort` for a mobile package, `desktopPort` for desktop);
+  4. `PORT=` in the package's `.env.local` / `.env.development` / `.env`, then the project's;
+  5. a `PORT ?? N` / `DEFAULT_PORT = N` in the file the script runs;
+  6. Metro's 8081 for `expo start`;
+  7. `vite.config`'s `port:`, else 5173.
+
+  One `--cwd <dir> <script>` delegation is followed. When something already listens there (the port, or for portless any server in that package's folder), the button becomes `↗ :4747 up` and opens it instead of starting a second copy. `--project --json` carries it as `dev[].target` (`port`, `url`, `via`).
 - **WSL servers:** the Windows build can't see WSL listeners, and a W:\ project's servers almost always run there. For a W:\ project the panel reads `~/.bun/bin/destedtui --ports --json` inside the distro every 6 s (about 1.4 s a call, off the render path).
 - **Databases:** one row per distinct target, deduped by host/db:
   - `.env*` URLs (local or remote);

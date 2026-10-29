@@ -514,7 +514,21 @@ function LeftPanel(p: LeftProps) {
   const dev = p.stat?.dev ?? [];
   const devItems: BarItem[] = dev.slice(0, 3).map((d) => {
     const live = jobs.live(`dev:${d.cwd}`);
-    return btn(live ? `■ ${d.label}` : `▶ ${d.label}`, live ? T.red : T.green, () => p.on.toggleDev(d));
+    const t = d.target;
+    // `:4747`, or the portless name without its scheme
+    const where = t?.port ? `:${t.port}` : t?.url ? t.url.replace(/^https?:\/\//, "") : "";
+    const label = where ? `${d.label} ${where}` : d.label;
+    if (live) return btn(`■ ${label}`, T.red, () => p.on.toggleDev(d));
+    // Already serving (some other shell or session started it): open it rather than start a second.
+    const rel = d.cwd.slice(p.project.dir.length).replace(/^[\\/]+/, "").replace(/\\/g, "/");
+    const tp = t?.port ?? null;
+    // portless picks a random app port, so a portless app is up when a server runs in its folder
+    const up = tp !== null ? p.servers.some((s) => s.ports.includes(tp)) : t?.url ? p.servers.some((s) => s.sub === rel) : false;
+    if (up && t?.url) {
+      const url = t.url;
+      return btn(`↗ ${where} up`, T.cyan, () => p.on.openUrl(url));
+    }
+    return btn(`▶ ${label}`, T.green, () => p.on.toggleDev(d));
   });
 
   const srvRows = p.servers.length > S ? p.servers.slice(0, S - 1) : p.servers;

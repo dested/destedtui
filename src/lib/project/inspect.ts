@@ -7,6 +7,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { isEnvFile, parseEnv, SKIP_DIRS, type Discovery, type PackageInfo } from "../discovery.ts";
 import { gitCommand } from "../keys/envfile.ts";
+import { devTarget, type DevTarget } from "./devport.ts";
 import { findSchemas, type PrismaSchema } from "./prisma.ts";
 
 export interface EnvFile {
@@ -20,6 +21,8 @@ export interface DevCommand {
   label: string;
   command: string;
   cwd: string;
+  /** where it'll serve, null when nothing on disk says */
+  target: DevTarget | null;
 }
 
 export interface Commit {
@@ -64,18 +67,24 @@ export function envFiles(dir: string, maxDepth = 3): EnvFile[] {
 const DEV_SCRIPTS = ["dev", "start", "serve"];
 
 /** The root's dev script, then each workspace package's (a monorepo's apps). */
-export function devCommands(packages: PackageInfo[]): DevCommand[] {
+export function devCommands(packages: PackageInfo[], projectDir: string): DevCommand[] {
   const out: DevCommand[] = [];
   for (const p of packages) {
     const script = DEV_SCRIPTS.find((s) => typeof p.scripts[s] === "string");
-    if (!script) continue;
-    out.push({ label: p.rel === "." ? `${p.pm} run ${script}` : `${p.rel.replace(/\\/g, "/")} · ${script}`, command: `${p.pm} run ${script}`, cwd: p.dir });
+    // a dependency cache vendored into the repo (video-studio's data/bun-cache) isn't an app
+    if (!script || /(?:^|[\\/])(?:bun-cache|\.cache|node_modules)(?:[\\/]|$)/.test(p.rel)) continue;
+    out.push({
+      label: p.rel === "." ? `${p.pm} run ${script}` : `${p.rel.replace(/\\/g, "/")} · ${script}`,
+      command: `${p.pm} run ${script}`,
+      cwd: p.dir,
+      target: devTarget(p.scripts[script] ?? "", p.dir, projectDir),
+    });
   }
   return out;
 }
 
 export function staticPicture(dir: string, discovery: Discovery): StaticPicture {
-  return { schemas: findSchemas(dir, discovery.packages), envFiles: envFiles(dir), dev: devCommands(discovery.packages) };
+  return { schemas: findSchemas(dir, discovery.packages), envFiles: envFiles(dir), dev: devCommands(discovery.packages, dir) };
 }
 
 /** The last few commits, newest first (empty when it isn't a repo). */

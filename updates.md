@@ -2,6 +2,23 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-28 — Project panel: dev buttons say where they'll serve
+**Asked:** show what port the dev server will start on, or that it's a portless project.
+
+**Done:**
+- `devTarget` (`lib/project/devport.ts`) checks these sources: portless name, `--port`, `project.json` (api/metro/desktop by package), `.env` `PORT`, source default, Metro/vite defaults.
+- Buttons read `▶ bun run dev :4747` or `▶ … board.localhost`.
+- A button turns into `↗ :4747 up` when something already serves there.
+- `--project --json` gains `dev[].target`.
+- Vendored dependency caches (`bun-cache`, `node_modules`) no longer show up as dev commands.
+
+**Verified:**
+- All 45 W:\code projects with a dev script: every one resolves except destedtui, redlight, scenebeans' root and clever-harness, where nothing on disk names a port.
+- Frames: sal-board → `↗ board.localhost up`, zenith → `▶ bun run dev :4747`.
+- tsc green.
+
+**Touched:** src/lib/project/{devport,inspect}.ts, src/screens/Project.tsx, features/project.md, cliffnotes.md
+
 ## 2026-10-28 — Project panel (Deck-style per-project view)
 **Asked:** per project, everything you can do there: Prisma Studio, run the server, see what's running and how many (subagents on other ports), connect to local/dev/prod databases through Drydock, see all the project's activity, in G:\ or W:\ projects.
 
