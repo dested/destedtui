@@ -78,6 +78,27 @@ are Node launchers that restart the Bun process (decisions.md 2026-10-10). A
 leak only grows while someone is actively using a screen, or while one is held
 awake (term panes, dev servers).
 
+## 2026-10-15: suspect 2 confirmed on the startup screen
+
+- Incident: a `--projects` TUI left on the startup dashboard (dev servers hold
+  it awake, so no idle pause) ran 13 h to 19 GB private / 1.2 GB working set,
+  ~44 MB/min while idle.
+- Repro: the real TUI under ConPTY (node-pty), fake `sal-todo` emitter, private
+  bytes sampled in-process. Before: ~25 MB/min, JS heap flat, frames ~9/s.
+- Bisect (copy of `Startup.tsx` with env gates, test renderer, 5 ms tick):
+  ~50 KB per commit with the rail, ~3-5 KB without it or with no tick. Not
+  renderable churn (live renderable count constant), not output volume, not
+  stream pumping, not `ptr()`/TextEncoder/typed arrays, not per-frame native
+  rendering (a bare renderer at 10 fps is flat). The cost follows React commits
+  of the rail's subtree, changed or not; the exact native op is still unknown.
+- Fix (`Startup.tsx`): the tick moved into leaf `<Dot>`/`<Status>` components
+  (`useTick`), `AppRow` memoized on primitives, console lines memoized with
+  absolute-line keys. After, 8 min: +5 MB with a 4000-line console, flat with a
+  few lines; frames ~2/s.
+- Still open: Ports, Procs, Bx, BxProfiles, Keys, KeysUsage and ClaudeUsage tick
+  a spinner at the screen level every 120 ms. They pause after a minute idle,
+  but one held open (or awake) has the same exposure.
+
 ## Steps
 
 1. **Measure first.** Add a hidden `--memlog` flag that appends every 15 s to

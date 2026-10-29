@@ -51,6 +51,8 @@ export interface AppRuntime {
   spec: AppSpec;
   phase: Phase;
   lines: OutputLine[];
+  /** Lines ever pushed, never reset: `lines[i]` is line number `total - lines.length + i`, a key that survives trimming the front. */
+  total: number;
   handle: ProcHandle | null;
   exitCode: number | null;
   startedAt: number | null;
@@ -91,6 +93,7 @@ class StartupManager {
         spec,
         phase: "stopped",
         lines: [],
+        total: 0,
         handle: null,
         exitCode: null,
         startedAt: null,
@@ -195,6 +198,7 @@ class StartupManager {
 
   private push(rt: Internal, line: OutputLine): void {
     rt.lines.push(line);
+    rt.total++;
     if (rt.lines.length > MAX_LINES) rt.lines.splice(0, rt.lines.length - MAX_LINES);
     this.revision++;
   }

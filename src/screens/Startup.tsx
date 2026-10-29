@@ -1,11 +1,11 @@
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import { useKeyboard } from "@opentui/react";
 import { SPINNER_FRAMES, T } from "../theme.ts";
 import { Footer } from "../components/Footer.tsx";
 import { Button } from "../components/ProjectCard.tsx";
 import { pad } from "../lib/text.ts";
-import { openInChrome } from "../lib/run.ts";
-import { startup, type AppRuntime, type Phase } from "../lib/startup.ts";
+import { openInChrome, type OutputLine } from "../lib/run.ts";
+import { startup, type AppRuntime, type AppSpec, type Phase } from "../lib/startup.ts";
 
 const RAIL_WIDTH = 40;
 const CARD_HEIGHT = 5; // border 2 + 3 inner lines
@@ -17,7 +17,6 @@ interface Props {
 export function Startup({ back }: Props) {
   const [, force] = useState(0);
   const [selected, setSelected] = useState(0);
-  const [frame, setFrame] = useState(0);
   const rev = useRef(-1);
 
   // Start the apps marked auto the first time the dashboard opens. The manager
@@ -35,12 +34,6 @@ export function Startup({ back }: Props) {
         force((x) => x + 1);
       }
     }, 80);
-    return () => clearInterval(t);
-  }, []);
-
-  // Its own tick so spinners spin and the elapsed clock ticks while idle.
-  useEffect(() => {
-    const t = setInterval(() => setFrame((f) => (f + 1) % SPINNER_FRAMES.length), 100);
     return () => clearInterval(t);
   }, []);
 
@@ -82,8 +75,8 @@ export function Startup({ back }: Props) {
   return (
     <box style={{ flexGrow: 1, flexDirection: "column" }}>
       <box style={{ flexGrow: 1, flexDirection: "row" }}>
-        <Rail apps={apps} index={index} frame={frame} onSelect={setSelected} />
-        <Console app={sel} frame={frame} />
+        <Rail apps={apps} index={index} onSelect={setSelected} />
+        <Console app={sel} />
       </box>
       <Footer
         hints={[
@@ -102,17 +95,7 @@ export function Startup({ back }: Props) {
   );
 }
 
-function Rail({
-  apps,
-  index,
-  frame,
-  onSelect,
-}: {
-  apps: AppRuntime[];
-  index: number;
-  frame: number;
-  onSelect: (i: number) => void;
-}) {
+function Rail({ apps, index, onSelect }: { apps: AppRuntime[]; index: number; onSelect: (i: number) => void }) {
   const anyRunning = apps.some((a) => a.handle);
   return (
     <box
@@ -133,7 +116,18 @@ function Rail({
     >
       <box style={{ flexDirection: "column", gap: 1, flexGrow: 1 }}>
         {apps.map((app, i) => (
-          <AppRow key={app.spec.id} app={app} selected={i === index} frame={frame} onSelect={() => onSelect(i)} />
+          <AppRow
+            key={app.spec.id}
+            spec={app.spec}
+            phase={app.phase}
+            running={app.handle !== null}
+            auto={startup.isAuto(app.spec.id)}
+            startedAt={app.startedAt}
+            exitCode={app.exitCode}
+            selected={i === index}
+            index={i}
+            onSelect={onSelect}
+          />
         ))}
       </box>
       <box style={{ flexDirection: "row", gap: 1, height: 1, marginTop: 1 }}>
@@ -144,25 +138,39 @@ function Rail({
   );
 }
 
-function AppRow({
-  app,
+/**
+ * One card, memoized on primitives (the runtime object is mutated in place, so
+ * it can't be the memo key): it re-renders only when what it shows changes.
+ * The spinner and the clock tick inside <Dot>/<Status>, see useTick.
+ */
+const AppRow = memo(function AppRow({
+  spec,
+  phase,
+  running,
+  auto,
+  startedAt,
+  exitCode,
   selected,
-  frame,
+  index,
   onSelect,
 }: {
-  app: AppRuntime;
+  spec: AppSpec;
+  phase: Phase;
+  running: boolean;
+  auto: boolean;
+  startedAt: number | null;
+  exitCode: number | null;
   selected: boolean;
-  frame: number;
-  onSelect: () => void;
+  index: number;
+  onSelect: (i: number) => void;
 }) {
   const inner = RAIL_WIDTH - 4; // border 2 + rail padding 2
   const width = inner; // card sits flush inside the rail padding
   const pad2 = width - 4; // card border 2 + card padding 2
-  const running = app.handle !== null;
-  const dot = phaseDot(app.phase, frame);
-  const nameWidth = Math.max(1, pad2 - app.spec.note.length - 3);
+  const nameWidth = Math.max(1, pad2 - spec.note.length - 3);
   // Hoisted so the button closure narrows without a non-null assertion.
-  const url = app.spec.url;
+  const url = spec.url;
+  const select = () => onSelect(index);
 
   return (
     <box
@@ -173,39 +181,77 @@ function AppRow({
         flexDirection: "column",
         border: true,
         borderStyle: "rounded",
-        borderColor: selected ? app.spec.accent : T.border,
+        borderColor: selected ? spec.accent : T.border,
         backgroundColor: selected ? T.selectionBg : T.panel,
         paddingLeft: 1,
         paddingRight: 1,
       }}
-      onMouseOver={onSelect}
-      onMouseDown={onSelect}
+      onMouseOver={select}
+      onMouseDown={select}
     >
       <text>
-        <span fg={dot.color}>{`${dot.glyph} `}</span>
-        <span fg={selected ? app.spec.accent : T.fg}>{pad(app.spec.name, nameWidth)}</span>
-        <span fg={T.dim}>{` ${app.spec.note}`}</span>
+        <Dot phase={phase} />
+        <span fg={selected ? spec.accent : T.fg}>{pad(spec.name, nameWidth)}</span>
+        <span fg={T.dim}>{` ${spec.note}`}</span>
       </text>
-      <text fg={statusColor(app.phase)}>{pad(statusText(app, frame), pad2)}</text>
+      <Status phase={phase} startedAt={startedAt} exitCode={exitCode} width={pad2} />
       <box style={{ flexDirection: "row", gap: 1, height: 1, width: pad2 }}>
         {running ? (
-          <Button label="■ stop" color={T.red} onPress={() => startup.stop(app.spec.id)} />
+          <Button label="■ stop" color={T.red} onPress={() => startup.stop(spec.id)} />
         ) : (
-          <Button label="▶ start" color={T.green} onPress={() => startup.start(app.spec.id)} />
+          <Button label="▶ start" color={T.green} onPress={() => startup.start(spec.id)} />
         )}
-        <Button label="⟳" color={T.yellow} onPress={() => startup.restart(app.spec.id)} />
+        <Button label="⟳" color={T.yellow} onPress={() => startup.restart(spec.id)} />
         {url ? <Button label="↗ open" color={T.cyan} onPress={() => openInChrome(url)} /> : null}
-        <Button
-          label={startup.isAuto(app.spec.id) ? "◉ auto" : "○ auto"}
-          color={startup.isAuto(app.spec.id) ? T.teal : T.dim}
-          onPress={() => startup.toggleAuto(app.spec.id)}
-        />
+        <Button label={auto ? "◉ auto" : "○ auto"} color={auto ? T.teal : T.dim} onPress={() => startup.toggleAuto(spec.id)} />
       </box>
     </box>
   );
+});
+
+/**
+ * Re-render every `ms`, or never when null. The spinner and the elapsed clock
+ * tick in these leaf components on purpose: re-rendering the whole dashboard
+ * every 100 ms grew the process by ~25-45 MB/min of native memory for as long as
+ * it stayed open (opentui 0.4.3 / Bun 1.3.10 on Windows: 19 GB over a 13 h day),
+ * and that cost scales with the subtree that re-renders, not with what changed.
+ * See plans/2026-10-07-memory-leak.md.
+ */
+function useTick(ms: number | null): number {
+  const [n, setN] = useState(0);
+  useEffect(() => {
+    if (ms === null) return;
+    const t = setInterval(() => setN((x) => x + 1), ms);
+    return () => clearInterval(t);
+  }, [ms]);
+  return n;
 }
 
-function Console({ app, frame }: { app: AppRuntime; frame: number }) {
+/** The phase dot: a spinner while booting (10 fps), otherwise static. */
+function Dot({ phase }: { phase: Phase }) {
+  const frame = useTick(phase === "booting" ? 100 : null);
+  const dot = phaseDot(phase, frame);
+  return <span fg={dot.color}>{`${dot.glyph} `}</span>;
+}
+
+/** Status line: spinner + clock while booting, a 1 s clock while running. */
+function Status({
+  phase,
+  startedAt,
+  exitCode,
+  width,
+}: {
+  phase: Phase;
+  startedAt: number | null;
+  exitCode: number | null;
+  width?: number;
+}) {
+  const frame = useTick(phase === "booting" ? 100 : phase === "ready" ? 1000 : null);
+  const text = statusText(phase, startedAt, exitCode, frame);
+  return <text fg={statusColor(phase)}>{width === undefined ? text : pad(text, width)}</text>;
+}
+
+function Console({ app }: { app: AppRuntime }) {
   return (
     <box
       title={` ${app.spec.name} console `}
@@ -222,7 +268,7 @@ function Console({ app, frame }: { app: AppRuntime; frame: number }) {
     >
       <box style={{ flexDirection: "row", justifyContent: "space-between", paddingLeft: 1, paddingRight: 1, height: 1 }}>
         <text fg={T.dim}>{`${app.spec.command}  ·  ${app.spec.dir}`}</text>
-        <text fg={statusColor(app.phase)}>{statusText(app, frame)}</text>
+        <Status phase={app.phase} startedAt={app.startedAt} exitCode={app.exitCode} />
       </box>
       <scrollbox
         focused
@@ -237,16 +283,28 @@ function Console({ app, frame }: { app: AppRuntime; frame: number }) {
         {app.lines.length === 0 ? (
           <text fg={T.dim}>{app.phase === "stopped" ? startup.isAuto(app.spec.id) ? "not running — press s to start" : "not running — s to start, t to start it whenever the dashboard opens" : "…"}</text>
         ) : (
-          app.lines.map((line, i) => (
-            <text key={i} fg={line.stream === "stderr" ? T.orange : line.stream === "info" ? T.dim : T.fg}>
-              {line.text || " "}
-            </text>
-          ))
+          <ConsoleLines lines={app.lines} total={app.total} />
         )}
       </scrollbox>
     </box>
   );
 }
+
+/**
+ * The scrollback, memoized so a re-render of the console (status, selection)
+ * doesn't reconcile up to MAX_LINES <text>s. `lines` is mutated in place, so
+ * `total` is what tells memo a line arrived; a clear swaps the array. Keys are
+ * absolute line numbers, so trimming the front drops one node instead of
+ * rewriting every line's text.
+ */
+const ConsoleLines = memo(function ConsoleLines({ lines, total }: { lines: OutputLine[]; total: number }) {
+  const first = total - lines.length;
+  return lines.map((line, i) => (
+    <text key={first + i} fg={line.stream === "stderr" ? T.orange : line.stream === "info" ? T.dim : T.fg}>
+      {line.text || " "}
+    </text>
+  ));
+});
 
 function phaseDot(phase: Phase, frame: number): { glyph: string; color: string } {
   switch (phase) {
@@ -276,16 +334,16 @@ function statusColor(phase: Phase): string {
   }
 }
 
-function statusText(app: AppRuntime, frame: number): string {
-  switch (app.phase) {
+function statusText(phase: Phase, startedAt: number | null, exitCode: number | null, frame: number): string {
+  switch (phase) {
     case "booting":
-      return `${SPINNER_FRAMES[frame % SPINNER_FRAMES.length]} starting… · ${elapsed(app.startedAt)}`;
+      return `${SPINNER_FRAMES[frame % SPINNER_FRAMES.length]} starting… · ${elapsed(startedAt)}`;
     case "ready":
-      return `running · ${elapsed(app.startedAt)}`;
+      return `running · ${elapsed(startedAt)}`;
     case "exited":
       return `exited (0)`;
     case "crashed":
-      return `crashed (${app.exitCode})`;
+      return `crashed (${exitCode})`;
     default:
       return "stopped";
   }
