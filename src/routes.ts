@@ -1,4 +1,4 @@
-import type { PackageInfo } from "./lib/discovery.ts";
+import type { DatabaseInfo, PackageInfo } from "./lib/discovery.ts";
 import type { RestoreMode } from "./lib/restore.ts";
 import type { ReviewScope } from "./lib/review.ts";
 
@@ -6,10 +6,11 @@ export type Route =
   | { name: "menu" }
   | { name: "scripts" }
   | { name: "process"; pkg: PackageInfo; script: string }
-  | { name: "backup"; presetUrl?: string; presetLabel?: string }
+  | { name: "backup"; presetUrl?: string; presetLabel?: string; presetDir?: string }
   | { name: "restore"; preset?: { url: string; mode: RestoreMode; label: string } }
   | { name: "localdb" }
-  | { name: "pull" }
+  | { name: "pull"; preset?: DatabaseInfo }
+  | { name: "project"; dir?: string }
   | { name: "startup" }
   | { name: "term" }
   | { name: "ports" }

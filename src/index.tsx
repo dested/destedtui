@@ -73,6 +73,11 @@ if (args.includes("--ports") && args.includes("--json")) {
   process.exit(await runPortsJson(args));
 }
 
+if (args.includes("--project") && args.includes("--json")) {
+  const { runProjectJson } = await import("./lib/project/cli.ts");
+  process.exit(await runProjectJson(args));
+}
+
 if (args.includes("--usage")) {
   const { runUsageCli } = await import("./lib/claude/cli.ts");
   process.exit(runUsageCli(args));
@@ -111,6 +116,15 @@ else if (args.includes("--local")) initialRoute = { name: "localdb" };
 else if (args.includes("--pull")) initialRoute = { name: "pull" };
 else if (args.includes("--review")) initialRoute = { name: "review" };
 else if (args.includes("--claude")) initialRoute = { name: "claude" };
+else if (args.includes("--project")) {
+  const { projectFromArgs } = await import("./lib/project/cli.ts");
+  const ref = projectFromArgs(args, process.cwd());
+  if ("error" in ref) {
+    console.error(ref.error);
+    process.exit(1);
+  }
+  initialRoute = { name: "project", dir: ref.dir };
+}
 
 const { bootTui } = await import("./tui.tsx");
 await bootTui(initialRoute);

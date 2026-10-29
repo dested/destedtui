@@ -12,11 +12,13 @@ const WINDOWS_TILES: Record<string, Route> = { startup: { name: "startup" }, bx:
 
 interface Props {
   discovery: Discovery | null;
+  /** the project the cwd is in, null at a projects root */
+  project: string | null;
   go: (route: Route) => void;
   quit: () => void;
 }
 
-export function MainMenu({ discovery, go, quit }: Props) {
+export function MainMenu({ discovery, project, go, quit }: Props) {
   const pkgCount = discovery?.packages.length ?? 0;
   const scriptCount = discovery?.packages.reduce((n, p) => n + Object.keys(p.scripts).length, 0) ?? 0;
   const dbCount = discovery?.databases.length ?? 0;
@@ -26,6 +28,18 @@ export function MainMenu({ discovery, go, quit }: Props) {
   });
 
   const items: ListItem[] = [
+    ...(project
+      ? [
+          {
+            id: "project",
+            icon: "⌂",
+            title: project,
+            subtitle: "servers, databases, prisma, drydock, git and claude for this project",
+            badge: "panel",
+            badgeColor: T.teal,
+          },
+        ]
+      : []),
     {
       id: "projects",
       icon: "◈",
@@ -176,7 +190,8 @@ export function MainMenu({ discovery, go, quit }: Props) {
           vimKeys
           visible={15}
           onSelect={(item) => {
-            if (item.id === "projects") go({ name: "projects" });
+            if (item.id === "project") go({ name: "project" });
+            else if (item.id === "projects") go({ name: "projects" });
             else if (item.id === "review") go({ name: "review" });
             else if (item.id === "startup") go({ name: "startup" });
             else if (item.id === "term") go({ name: "term" });

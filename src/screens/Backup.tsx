@@ -14,11 +14,13 @@ interface Props {
   /** When set, back up this exact database (e.g. from the Local Postgres browser) — skips the picker. */
   presetUrl?: string;
   presetLabel?: string;
+  /** where the zip lands (default: the cwd) */
+  presetDir?: string;
 }
 
 type Phase = "pick" | "running" | "done" | "error";
 
-export function Backup({ discovery, back, presetUrl, presetLabel }: Props) {
+export function Backup({ discovery, back, presetUrl, presetLabel, presetDir }: Props) {
   const [phase, setPhase] = useState<Phase>(presetUrl ? "running" : "pick");
   const [events, setEvents] = useState<BackupEvent[]>([]);
   const [result, setResult] = useState<BackupResult | null>(null);
@@ -36,7 +38,7 @@ export function Backup({ discovery, back, presetUrl, presetLabel }: Props) {
     if (!presetUrl) return;
     run({
       envPath: "",
-      dir: process.cwd(),
+      dir: presetDir ?? process.cwd(),
       rel: ".",
       key: presetLabel ?? "localhost",
       url: presetUrl,

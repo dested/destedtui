@@ -121,6 +121,14 @@ Touchpoints: `src/lib/claude/`, `src/screens/ClaudeUsage.tsx`
 5. Buttons, with real mouse clicks (`click:<label>`, `_` = space): `--size 120x34 --keys "click:2_timeline click:weeks snap click:◀ snap click:≡_sessions snap click:✕_clear click:1_projects click:recent snap click:←_back snap"` → weekly grid, cursor moves a week, sessions scoped to that week, filter clears, sort flips to recent, back lands on the menu.
 6. Other screens' buttons: `--route ports|keys|rotate|rotate-dead|term` (the rotate routes open in simulate). E.g. `--route rotate --keys "wait500 click:<fp> click:^▶_start click:^⚠_confirm wait1500 snap"`. Never click `✓ go` / `⧉ read clipboard` / `✕` revoke on the real `keys` route.
 
+### Project panel [cheap → starts a Studio and a throwaway server]
+Touchpoints: `src/lib/project/`, `src/screens/Project.tsx`, `inDistro` in `src/lib/platform.ts`
+1. `bun src/index.tsx --project W:/code/zenith --json` → parses. `targets` has local + `prod · marblehop`, each `migrations` applied = repo; `git` comes through Linux git. `--no-db` returns in ~1.5 s. No `postgres://` anywhere in the output.
+2. Frames from the project folder: `cd W:\code\sal-board; bun G:\code\destedtui\scripts\snap-claude.tsx --route project --size 200x44 --keys "wait9000 snap"`. The WSL `bun --watch server.ts` row shows owner `wsl`, the db row has its stats, and the right column is filled. Repeat at `120x34` (tabs).
+3. W:\ tooling runs in WSL: start `jobs` with `prisma studio --port <free> --browser none` in `W:/code/zenith` with the local URL → `ready` in a few seconds, `GET /` 200, then `jobs.stop`, and `wsl.exe -d sal --exec pgrep -af "prisma studio"` finds nothing.
+4. WSL servers: a `bun -e 'Bun.serve({port:7391,…})'` job in `W:/code/zenith` → listed by `projectServers(…, await wslServers())` with side `wsl`; `killServer` → port 7391 gone from `wslServers()`.
+5. Never in a check: `⇄ tunnel` (opens a real SSM session to the Drydock box), `db push` / `deploy` against `prod`.
+
 ### bx daemons [cheap → spawns one headless daemon]
 Touchpoints: `src/lib/bx.ts`, `src/screens/Bx.tsx`, bx `src/daemon/debug.ts`
 1. A test daemon: `cd G:\code\bx && MSYS_NO_PATHCONV=1 bun src/cli.ts --profile bxtop --headless open about:blank`. Never stop, kill or gc another session's daemon to test.

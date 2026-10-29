@@ -2,6 +2,18 @@
 
 > Append-only. A recorded decision is settled unless the user reopens it.
 
+## 2026-10-28 — Project panel: front page inside a project, Studio in the browser, SSM tunnel on a standing OK
+- **Front page.** Starting `destedtui` inside a project opens the panel over the menu (stack `[menu, project]`), so esc still reaches the utilities.
+- **No TUI database browser.** Sal: "no tui browser lol". Deck only embedded Prisma Studio plus a read-only query box, so there was no better browser to port. `◧ studio` runs Prisma Studio and opens it in Chrome.
+- **Prod via SSM port-forward, standing OK** (Sal, 2026-10-28). `aws ssm start-session` with `AWS-StartPortForwardingSessionToRemoteHost` to the box's Postgres (`172.17.0.1:5432`), profile `dested`, on a button press only. It's a tunnel, never a shell or a command on the box. A direct connection to the EIP is preferred when 5432 answers.
+- **Writes to a remote need two presses** (`db push`, `migrate deploy`, Studio). `migrate dev` never runs against a remote.
+- **W:\ projects run their tooling in WSL** from the Windows build (`inDistro`), since their `node_modules` are Linux builds.
+
+**Rejected:**
+- a TUI table browser;
+- running W:\ prisma with Windows bun (it fetches the wrong prisma);
+- an SSM shell, or `psql` on the box.
+
 ## 2026-10-14 — keys searches W:\code and G:\code; a project in both gets both .env files written
 Supersedes the "root crosses as `W:\code`" part of 2026-10-13. keys has one projects-root list on Windows, `W:\code` then `G:\code`, whichever side launched it. A slug in both roots is one project with two copies. Every `.env` write, revoke and rotate retire goes to each copy, so whichever copy Sal runs works and no revoked value lingers in the other. (Sal picked this, 2026-10-14.) The bridge stops pinning the root, since pinning hid every G:-only project from WSL. startup/bx still get `W:\code` pinned (unchanged).
 **Rejected:** W: wins (a rotate leaves the G: copy on a dead key), cwd decides (the vault doesn't record which copy it wrote, so revoke could miss one), a list env var just for keys (`DESTEDTUI_PROJECTS_ROOT` takes a `path.delimiter` list instead).

@@ -95,14 +95,25 @@ export function runScript(pkg: PackageInfo, scriptName: string, onLine: (line: O
  * lifecycle as runScript (tracked in `running`, tree-killed on quit) — this is
  * the engine behind the startup dashboard's long-lived dev servers.
  */
-export function runCommand(command: string, cwd: string, onLine: (line: OutputLine) => void): ProcHandle {
-  const cmd = IS_WIN ? ["cmd.exe", "/d", "/s", "/c", command] : ["/bin/sh", "-c", command];
+export function runCommand(
+  /** a shell command line, or an argv spawned as is (no shell, no re-quoting) */
+  command: string | string[],
+  cwd: string,
+  onLine: (line: OutputLine) => void,
+  /** layered over process.env (a DATABASE_URL for prisma, say) */
+  env: Record<string, string> = {},
+): ProcHandle {
+  const cmd = Array.isArray(command)
+    ? command
+    : IS_WIN
+      ? ["cmd.exe", "/d", "/s", "/c", command]
+      : ["/bin/sh", "-c", command];
   const proc = Bun.spawn(cmd, {
     cwd,
     stdout: "pipe",
     stderr: "pipe",
     stdin: "ignore",
-    env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1" },
+    env: { ...process.env, FORCE_COLOR: "0", NO_COLOR: "1", ...env },
     // POSIX: its own process group, so a kill takes the whole command with it.
     detached: !IS_WIN,
   });

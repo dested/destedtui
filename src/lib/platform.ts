@@ -18,6 +18,8 @@ export const WIN_DEFAULT_ROOT = IS_WIN && existsSync("W:\\code") ? "W:\\code" : 
 export const LINUX_DEFAULT_ROOT = "/w/code";
 /** The distro's projects root (`/w/code`) as Windows sees it. */
 export const WIN_WSL_ROOT = "W:\\code";
+/** Where projects lived before the move into WSL; plenty still do. */
+export const WIN_LEGACY_ROOT = "G:\\code";
 
 /** True inside WSL, where Windows binaries run through interop. */
 export function isWsl(): boolean {
@@ -88,4 +90,33 @@ export function localPath(p: string): string {
   const drive = /^([A-Za-z]):(?:[\\/](.*))?$/.exec(p);
   if (drive) return `/mnt/${(drive[1] ?? "").toLowerCase()}/${(drive[2] ?? "").replace(/\\/g, "/")}`.replace(/\/+$/, "");
   return p;
+}
+
+export interface DistroCommand {
+  argv: string[];
+  /** what to spawn from: wsl.exe can't translate a W:\ cwd and says so on stderr */
+  cwd: string;
+  env: Record<string, string>;
+}
+
+/**
+ * Windows build, project under W:\: its node_modules are Linux builds, so a
+ * Windows `bunx prisma` would fetch some other prisma instead. Run the command
+ * inside the distro, in a login zsh (bun, node on PATH), with `env` carried
+ * across by WSLENV. Killing the wsl.exe takes the Linux side with it
+ * (taskkill /T on the relay; checked 2026-10-28). Null when it should run
+ * natively: Linux build, or a project on a Windows drive.
+ */
+export function inDistro(cwd: string, command: string, env: Record<string, string> = {}, interactive = false): DistroCommand | null {
+  if (!IS_WIN) return null;
+  const linux = winToLinux(cwd);
+  if (!linux) return null;
+  const names = Object.keys(env);
+  const wslenv = [process.env.WSLENV, ...names].filter((s) => s).join(":");
+  const shell = interactive ? ["zsh", "-lic", `${command}; exec zsh`] : ["zsh", "-lc", command];
+  return {
+    argv: ["wsl.exe", "-d", WSL_DISTRO, "--cd", linux, "--exec", ...shell],
+    cwd: process.env.USERPROFILE || "C:\\",
+    env: names.length ? { ...env, WSLENV: wslenv } : env,
+  };
 }

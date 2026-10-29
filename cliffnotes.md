@@ -22,7 +22,7 @@ Personal dev-project TUI for dested. Six jobs: (1) a **project picker** that lis
   - Chrome is the Windows one through interop; ports' copy-url uses `clip.exe`
 - **Type-check:** `bun x tsc --noEmit` (run it in the Linux copy too)
 - **Test:** no test runner — see `verify.md` for smoke/e2e scripts
-- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--procs`, `--bx` (+ `--log`), `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys`, `--claude` (jump straight to a screen), `--usage` (print Claude usage, `--days`/`--project`/`--json`), `--install-shell`, `--help`, `--version`
+- **CLI flags:** `--projects`/`-p`/`--cd`, `--startup`, `--term`, `--ports`, `--procs`, `--bx` (+ `--log`), `--backup`, `--restore`, `--local`, `--pull`, `--review`, `--keys`, `--claude` (jump straight to a screen), `--project [name|path]` (the project panel; `--json` prints its picture, `--no-db` skips the probes), `--usage` (print Claude usage, `--days`/`--project`/`--json`), `--install-shell`, `--help`, `--version`
 - **Second bin — `review`:** works in ANY repo; no args = TUI scope picker; `--staged`/`--last-commit`/`--last <n>`/`--branch`/`--pr <n>` deep-link; `--headless` (+ `--dry-run`, `--model`, `--effort`) prints the report without a TUI for the `/sal-review` Claude skill — exit 0 pass / 1 blocked / 2 error
 - **Third bin — `keys`:** the API-key vault. No args = the Keys screen; `list`/`new`/`add --clipboard|--stdin`/`env`/`revoke`/`reuse`/`import`/`providers`/`provider add`/`admin set`/`usage`/`push`/`drydock`/`rotate --dry-run` for Claude sessions (the `keys` skill, source `skill/keys/`). `reveal`/`copy` for a value (never printed inside Claude Code); values never on argv. Exit 0 ok / 1 user error / 2 provider API error
 - **Fourth bin — `tabs`:** `save <name>` (non-interactive, prints the captured table), `restore [name]` (TUI; `--all` / `--dry-run` skip it), `list`/`show <name> [--json]`/`rm <name>`; no args = the TUI. Snapshots in `G:\code\sals-powershell-setup\claude\sessions\<name>.json` (gitignored there; `TABS_DIR` overrides). Windows only underneath; the Linux bin forwards to `tabs.exe` with `TABS_SELF_TTY`. Shell: `save-sessions` / `restore-sessions` (pwsh + zsh)
@@ -31,6 +31,7 @@ Personal dev-project TUI for dested. Six jobs: (1) a **project picker** that lis
 - **Localhost (`ports`):** every node/bun process listening on TCP — URL, page title, cwd, command, kill chain. All data via **bun:ffi into Win32** (`lib/ports.ts`), no subprocesses; a scan is ~35ms and repeats every 2s. On Linux the same `OsLayer` reads `/proc` (`lib/ports.linux.ts`, ~15ms). `--ports --json` prints one scan with page titles as versioned JSON (`lib/ports-json.ts`), read by sal-agent's https://sal.localhost/ports; add fields, never rename them (top-level `platform` says which side scanned)
 - **Claude procs (`procs`, `--procs`):** what every Claude Code session spun up — one group per CLI `claude.exe` (its tool shells, servers, watchers), orphan groups per project (parent gone), dev work outside Claude. Live CPU (% of one core, smoothed), memory, ports, flags (hot, ×N dupes, daemon, mcp, bg = nohup'd from that session's scratchpad); two-press kill per unit, per group, or every orphan leftover (no port, not a daemon). `lib/procs.ts` on top of `processTable()` in `lib/ports.ts`. See [features/procs.md](features/procs.md)
 - **bx daemons (`bxtop`, `--bx`, `--bx --log`):** every bx browser daemon (G:\code\bx): state (in flight / recording / idle / old), who drives it (status-card label via the `x-bx-client` header), node + Chrome memory with trend and growth/min, per-tab heap/DOM/listeners, command journal, process tree, log tail; orphan daemons/Chromes/run files; two-press stop/kill, gc, heap snapshot, memlog to `~/.destedtui/bx-memlog/`. Reads each daemon's `GET /debug`. Its `⛁ profiles` button opens **bx profiles**: every `~/.bx/profiles` folder's size and last use (sized in a Worker), per-row delete, bulk prune of the unused ones (never `default` or in use). See [features/bx.md](features/bx.md)
+- **Project panel (`--project`):** the front page whenever `destedtui` starts inside a project (stack `[menu, project]`): its servers and who started them (Windows scan plus the distro's listeners for a W:\ project), every database with migration state, prisma buttons, Studio in Chrome, SSM tunnel to Drydock prod, dev server, backup/pull presets; git, Claude, Drydock and env beside it. See [features/project.md](features/project.md)
 - **Config / state:** `~/.destedtui/config.json` (localhost pg preset, `projectOpens` frecency, `commands` shortcuts, `termNotes` per-terminal notes keyed by title, optional `projectsRoot`)
 - **Tool cache:** downloaded pg binaries live in `~/.destedtui/pg/<major>/bin`
 - **Key vault:** `~/.destedtui/keys/vault.bin` (DPAPI, CurrentUser) + `vault.bin.1..5` backups + transient `vault.lock` + `usage.json` (usage cache, no secrets, 15-min freshness) + `drydock.json` (Drydock apps → folders, env as var → fingerprint, 15-min freshness); `KEYS_VAULT_DIR` overrides the folder; `DRYDOCK_URL` overrides the portal (`http://localhost:4400/trpc`)
@@ -94,7 +95,8 @@ src/
     Highlight.tsx       one padded line with the fuzzy-matched characters picked out
     ProgressBar.tsx     pct bar used by backup/restore/pull
   screens/
-    MainMenu.tsx        utility tiles incl. disabled "coming soon" rows
+    MainMenu.tsx        utility tiles incl. disabled "coming soon" rows; first tile `⌂ <project>` when the cwd is in one
+    Project.tsx         the project panel: servers (+ ▶ dev), databases (⇄ tunnel / ◧ studio / ⛁ / ⇩ pull), prisma bar, job console | activity (git, claude, drydock, env); two columns ≥150 wide, tabs below
     Startup.tsx         dev-fleet dashboard: rail of app cards (dot/spinner/buttons) + live console pane
     Procs.tsx           claude procs: grouped tree (session → units) with cpu/mem/up + ✕ row buttons, detail pane (flags explained, process tree); ✕ all per group, ✕ orphan leftovers in the bar
     Bx.tsx              bx daemons: 2-line daemon/orphan rows (state, memory, trend, growth, driver, ■ stop / ✕ row buttons) + detail pane with 5 views (overview/pages/activity/procs/log) and gc / heap snapshot / kill tree
@@ -115,6 +117,18 @@ src/
     KeysRotate.tsx      the rotate screen (`R`): shared keys → overview/plan → confirmed walk → revoke; dead-key batch (`d`); --simulate
     Tabs.tsx            tabs: snapshot list → tab list (2-line rows with a tick box; apps off by default) → one wt call, exits
   lib/
+    project/            the project panel's engine (features/project.md)
+      context.ts        projectAt(cwd, roots): first folder under a root, else git toplevel; inside()
+      prisma.ts         findSchemas (package.json prisma.schema → prisma.config.ts → prisma/schema.prisma → schema/), prismaCli(pm), PRISMA_ACTIONS (remote ok/confirm/never)
+      db.ts             DbTarget (.env local/remote + `prod · <app>`), buildTargets, probeDb (version/size/tables/_prisma_migrations), diffMigrations, tcpOpen
+      drydock.ts        appsForFolder, appDetail (state + SSM var names), dbReach (portal localDbUrl + box instance/region)
+      reach.ts          SSM tunnel job (`dested` profile, standing OK), resolveUrl (env → tunnel → direct EIP), openStudio
+      jobs.ts           `jobs` singleton: dev/prisma/studio/tunnel, ready by port or line, scrubbed output; W:\ jobs run through inDistro
+      servers.ts        ProjectServer (Windows unit or WSL listener), projectServers, wslServers (the distro's `--ports --json`), killServer
+      inspect.ts        staticPicture, envFiles (names only), devCommands, recentCommits
+      picture.ts        gather + toJson (v1 contract for `--project --json`)
+      cli.ts            projectFromArgs, runProjectJson
+      usage.ts          claude spend for one project, via usageWorker.ts
     startup.ts          the dev-fleet supervisor: APPS registry + module-level `startup` manager (start/stop/restart/all, opt-in auto-start: config `startupAuto`)
     platform.ts         Windows ↔ WSL: IS_WIN/IS_LINUX, isWsl, winHome, wslHome, winBin, WIN_WSL_ROOT, normalizeWslUnc (`\\wsl.localhost\sal\w\x` → `W:\x`), winToLinux (`W:\x` → `/w/x`), linuxToWin (`/w/x` → `W:\x`)
     winforward.ts       Linux build: windowsTarget(route) (startup/bx/bxProfiles/keys → a Windows bin), windowsUnavailable, runWindowsBin (terminal handed over; startup/bx get the root pinned to W:\code via WSLENV, keys doesn't), forwarding() for the idle pause
@@ -179,6 +193,8 @@ src/
 | Concept / task | Location |
 | --- | --- |
 | Add a new utility screen | `src/screens/`, route in `src/routes.ts`, wire in `src/App.tsx`, tile in `MainMenu.tsx` |
+| The project panel (servers, databases, prisma, Studio, tunnel) | `src/screens/Project.tsx` + `src/lib/project/` — spec in `features/project.md`; frames `bun scripts/snap-claude.tsx --route project` from the project folder |
+| Running a command for a W:\ project from Windows | `inDistro` in `src/lib/platform.ts` (used by `jobs.start` and `term.create`) |
 | The terminal multiplexer | `src/screens/Term.tsx` (UI) + `src/lib/term.ts` (`term` singleton) + `src/components/TerminalView.tsx` (render) + `ptyhost/host.mjs` (PTYs) |
 | How a keystroke reaches a terminal | `keyToBytes` in `Term.tsx` → `term.write` → `ptyhost.ts` → sidecar → node-pty. nav vs input mode + `ctrl+b` leader live in `Term.tsx` |
 | Modified keys to a terminal (ctrl+←/→, shift/alt arrows) | `keyToBytes` in `Term.tsx` — xterm modifier param `1+shift+2·alt+4·ctrl` |
@@ -284,7 +300,10 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Never buffer a dump in memory** — dumps can be multi-GB; all zip paths go through the streaming helpers in `lib/zip.ts`.
 - pg_dump/pg_restore version must be ≥ server major (restore wants ==); that's what `EDB_CANDIDATES` + `ensureTools` guarantee. New pg major released → add candidates to both `EDB_CANDIDATES` and `MAJOR_ORDER`.
 - `exitOnCtrlC: false` in the renderer — ctrl+c is handled in `App` (kills children via `killAll()` first). Don't re-enable.
-- Windows script execution goes through `cmd.exe /d /s /c`, and kills via `taskkill /T /F` (plain `.kill()` orphans grandchildren).
+- Windows script execution goes through `cmd.exe /d /s /c`, and kills via `taskkill /T /F` (plain `.kill()` orphans grandchildren). Never put a `wsl.exe … zsh -lc "…"` through that string: cmd's `/s` quoting mangles the nested quotes. `runCommand` takes an argv array for that.
+- **A W:\ project's `node_modules` are Linux builds.** From the Windows build, a `bunx prisma` there fetches some other prisma (`No command registered for 'studio'`). Anything that runs project tooling goes through `inDistro` (`wsl.exe -d sal --cd /w/… --exec zsh -lc`, env via `WSLENV`, spawned from `%USERPROFILE%` because wsl.exe can't translate a `W:\` cwd). Killing the `wsl.exe` tree-kills the Linux side. `~/.bun/bin` isn't on a login zsh's PATH; `/usr/local/bin` (bun, node) is.
+- **The Windows build can't see WSL listeners** (nor the reverse). The project panel asks the distro's `destedtui --ports --json`; the Ports screen still shows one side only.
+- `projectRoots()` on Windows is `W:\code` then `WIN_LEGACY_ROOT` (`G:\code`), deduped.
 - Literal ESC bytes in source files break this harness's edit tools — `ANSI_RE` in run.ts is built with `String.fromCharCode(0x1b)` on purpose.
 - Restore runs `--no-owner --no-acl --role=<url user>` (deliberate — see decisions.md).
 - **A box only paints the rect it occupies.** Rows removed by a filter, or a column that sizes to its content, leave the old pixels on screen. Anything whose size can change needs an explicit width/height (see `Projects.tsx` `listWidth`/`rows`) — this cost an afternoon.
@@ -346,5 +365,6 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 - **Done** Idle pause (2026-10-10): launcher, paused screen and resume, ~35 MB while paused. Verified in tmux: pause → click resume → pause → `q` quits (exit 0, nothing left over); the picker exits quietly; review and an open term pane never pause.
 - **Done** WSL (2026-10-13): everything but startup/bx runs natively in the `sal` distro; keys bridges to `keys.exe`; startup/bx tiles hand over to `destedtui.exe`. Verified per `verify.md` § Linux / WSL. Not wired into the real zshrc yet (the lead does that at publish).
 - **Done** [Tabs](features/tabs.md) (2026-10-16) — `tabs` bin + TUI + `save-sessions`/`restore-sessions`. Save verified against Sal's live 18-tab window (15 mapped to the right sessions, own tab and 2 renamed tabs reported, every title back afterwards), also through the WSL bridge; `--dry-run` argv checked; TUI frames headless. A real restore (opening tabs) not run.
+- **Done** [Project panel](features/project.md) (2026-10-28) — `--project [--json]`, default front page inside a project. Verified: JSON for acg-maybe (prod reached direct, pg 17) and zenith (local + prod `migrations ✓ 5/5`); Studio from Windows on zenith (W:\, runs in WSL) HTTP 200 in 1.5 s, nothing left after stop; a WSL dev server listed and killed from the Windows build; `migrate dev`-style pane runs in the distro with the env; frames headless at 200×44/48. The SSM tunnel is untested (session-manager-plugin not installed).
 - **Not built** (menu shows "coming soon"): Git dashboard, .env inspector, node_modules nuker
 - **Next:** whichever coming-soon tile the user picks

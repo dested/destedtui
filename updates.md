@@ -2,6 +2,31 @@
 
 > Terse log: what was asked → what was done. Newest first.
 
+## 2026-10-28 — Project panel (Deck-style per-project view)
+**Asked:** per project, everything you can do there: Prisma Studio, run the server, see what's running and how many (subagents on other ports), connect to local/dev/prod databases through Drydock, see all the project's activity, in G:\ or W:\ projects.
+
+**Done:**
+- The project panel (`--project [name|path]`, the front page inside a project, and a `⌂ <project>` menu tile):
+  - servers with their owner and kill, `▶` dev scripts;
+  - every database probed for migration state;
+  - Studio in Chrome, prisma buttons (`migrate dev` in a term pane), SSM tunnel to Drydock prod;
+  - backup/pull presets;
+  - git, Claude spend and sessions, Drydock, env names.
+- `--project --json` (v1, no secrets).
+- From Windows, W:\ project tooling runs in WSL (`inDistro`; `runCommand` takes an argv), and the panel reads WSL listeners from the distro's `--ports --json`.
+- `projectRoots()` no longer returns `W:\code` twice.
+
+**Verified:**
+- Studio on zenith returned HTTP 200 in 1.5 s and left nothing behind.
+- A WSL dev server was listed, then killed.
+- The env crossed into the distro.
+- JSON for acg-maybe and zenith, and frames at 200×44 and 200×48.
+- tsc green on Windows and in the Linux copy.
+
+The tunnel is untested: session-manager-plugin isn't installed. Board #621.
+
+**Touched:** src/lib/project/*, src/screens/{Project,MainMenu,Backup,Pull}.tsx, src/lib/{platform,projects,run,term,pause}.ts, src/lib/keys/drydock.ts, src/{App,index}.tsx, src/routes.ts, scripts/snap-claude.tsx, features/project.md, cliffnotes.md, decisions.md, ui.md, verify.md
+
 ## 2026-10-24 — Claude usage counts both sides of WSL
 Asked: Claude usage ignored WSL sessions (and the WSL build ignored Windows ones). Done: `CLAUDE_PROJECT_DIRS` scans this side's `~/.claude/projects` plus the other side's (`\\wsl.localhost\sal\home\dested` from Windows, `/mnt/c/Users/dested` from WSL); `projectOf` folds `W:\code`/`G:\code`/`/w/code`/`/mnt/g/code` (and their scratchpad slugs, both homes) to one project; resume runs on the session's own side (`resumeCommand`: `wsl.exe -d sal --cd` / `pwsh.exe`), `localPath` maps the cwd. Windows: 9,125 transcripts (32 GB) cold in 183 s, warm 2.7 s; scenebeans and the other WSL projects now show up. tsc green. Not yet run in the Linux copy.
 Touched: src/lib/platform.ts, src/lib/claude/{scan,view}.ts, src/screens/ClaudeUsage.tsx, features/claude-usage.md, cliffnotes.md

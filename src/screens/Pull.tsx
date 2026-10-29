@@ -21,12 +21,14 @@ import {
 interface Props {
   discovery: Discovery;
   back: () => void;
+  /** skip the pick: pull this one (the project panel's ⇩ on a database row) */
+  preset?: DatabaseInfo;
 }
 
 type Phase = "pickdb" | "connectlocal" | "typetarget" | "confirm" | "running" | "done" | "error";
 
-export function Pull({ discovery, back }: Props) {
-  const [phase, setPhase] = useState<Phase>("pickdb");
+export function Pull({ discovery, back, preset }: Props) {
+  const [phase, setPhase] = useState<Phase>(preset ? "connectlocal" : "pickdb");
   const [local] = useState<LocalConn>(() => loadLocalConn());
   const [source, setSource] = useState<DatabaseInfo | null>(null);
   const [localDbs, setLocalDbs] = useState<LocalDbInfo[]>([]);
@@ -62,6 +64,11 @@ export function Pull({ discovery, back }: Props) {
         setPhase("error");
       });
   };
+
+  useEffect(() => {
+    if (preset) pickSource(preset);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const submitTarget = (raw: string) => {
     const name = (raw.trim() || sourceDb).trim();
@@ -111,11 +118,13 @@ export function Pull({ discovery, back }: Props) {
     switch (phase) {
       case "running":
         jobRef.current?.cancel();
-        setPhase("pickdb");
+        if (preset) back();
+        else setPhase("pickdb");
         break;
       case "connectlocal":
       case "typetarget":
-        setPhase("pickdb");
+        if (preset) back();
+        else setPhase("pickdb");
         break;
       case "confirm":
         setConfirmText("");

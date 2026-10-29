@@ -69,6 +69,16 @@ Every screen = same shell: `Header` (ascii-font "DESTED" gradient purple→blue�
 
 **Click is the primary input.** Hover selects, a single click acts — no select-then-confirm. Anything a mouse can do the keyboard must do too (arrows + enter), but the footer only advertises click, arrows, enter and esc — never a wall of letter shortcuts (Sal, 2026-10-04: buttons, not letter toggles).
 
+**Project panel** (accent teal): two bordered panels side by side at ≥150 columns (left 60%, ` ⌂ <name> ` and ` activity `), otherwise one at a time. Narrow mode shows a `project · activity` seg in the action bar. Left, top to bottom:
+- a summary line;
+- `servers` section bar (`n listening` dim, `▶ <dev>` buttons right), then server table rows (caret, health dot, `:port` + `+n`, “title”, sub · command, owner coloured by kind: session purple, panel teal, orphan orange, wsl cyan, you dim; up, mem, ↗ ✕);
+- `databases` rows (dot, short label, where · pg · size · tables · migration state with `✓` green / pending yellow / failed red, then fixed-width `⇄ tunnel` `◧ studio` `⛁` `⇩ pull`);
+- the prisma line and its bar (`on` seg over targets, then the actions);
+- `console`: job seg, ↗ ■ ✕, then the job's tail;
+- action bar (`↻ rescan` `≡ utilities` `← back`) and the status line.
+
+Right: `git`, `claude`, `drydock`, `env` sections, each a dim section bar over two-space-indented rows. The usage sparkline takes whatever width the text leaves.
+
 ## Painting (learned the hard way)
 
 A box paints only the rect it occupies; opentui does not clear what a shrinking or moving element vacates. So:

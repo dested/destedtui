@@ -13,7 +13,7 @@ const TIMEOUT_MS = 20_000;
 
 const trpcError = z.object({ error: z.object({ message: z.string() }).passthrough() });
 
-async function trpc<S extends z.ZodType>(kind: "query" | "mutation", path: string, input: unknown, schema: S): Promise<z.infer<S>> {
+export async function trpc<S extends z.ZodType>(kind: "query" | "mutation", path: string, input: unknown, schema: S): Promise<z.infer<S>> {
   const url = kind === "query" ? `${DRYDOCK_URL}/${path}${input === undefined ? "" : `?input=${encodeURIComponent(JSON.stringify(input))}`}` : `${DRYDOCK_URL}/${path}`;
   let res: Response;
   try {

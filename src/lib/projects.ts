@@ -3,7 +3,8 @@ import { homedir } from "node:os";
 import { delimiter, join } from "node:path";
 import { readConfig, patchConfig } from "./config.ts";
 import { fuzzyMatch, type Match } from "./fuzzy.ts";
-import { IS_LINUX, IS_WIN, LINUX_DEFAULT_ROOT, WIN_DEFAULT_ROOT, WIN_WSL_ROOT } from "./platform.ts";
+import { IS_LINUX, IS_WIN, LINUX_DEFAULT_ROOT, WIN_DEFAULT_ROOT, WIN_LEGACY_ROOT, WIN_WSL_ROOT } from "./platform.ts";
+import { gitCommand } from "./keys/envfile.ts";
 
 export interface ProjectInfo {
   /** Absolute project directory */
@@ -51,7 +52,7 @@ export function projectRoots(): string[] {
   if (fromEnv?.length) return fromEnv;
   const fromConfig = readConfig().projectsRoot;
   if (typeof fromConfig === "string" && fromConfig) return [fromConfig];
-  return IS_WIN ? [WIN_WSL_ROOT, WIN_DEFAULT_ROOT] : [projectsRoot()];
+  return IS_WIN ? [...new Set([WIN_WSL_ROOT, WIN_LEGACY_ROOT])] : [projectsRoot()];
 }
 
 /** Case- and separator-insensitive key for a path (Windows paths are both). */
@@ -400,8 +401,10 @@ export interface ProjectDetail {
 
 async function git(dir: string, args: string[]): Promise<string | null> {
   try {
-    const proc = Bun.spawn(["git", ...args], {
-      cwd: dir,
+    // W:\ repos go through the distro's git (gitCommand in keys/envfile.ts).
+    const { cmd, cwd } = gitCommand(dir, args);
+    const proc = Bun.spawn(cmd, {
+      cwd,
       stdout: "pipe",
       stderr: "ignore",
       stdin: "ignore",

@@ -1,7 +1,7 @@
 import { Terminal } from "@xterm/headless";
 import { PtyHost } from "./ptyhost.ts";
 import { isRecord, patchConfig, readConfig } from "./config.ts";
-import { IS_WIN } from "./platform.ts";
+import { inDistro, IS_WIN } from "./platform.ts";
 
 /**
  * The terminal multiplexer's brain. Owns a fleet of interactive PTY sessions
@@ -75,9 +75,18 @@ const SHELL_ENV: Record<string, string> = IS_WIN ? { DESTEDTUI_NO_AUTOSTART: "1"
  * command and drops back into a shell when it exits (pwsh -NoExit, zsh's
  * `; exec zsh`) — writing it as keystrokes would race a slow profile.
  */
-function shellArgs(kind: TermKind): string[] {
-  if (IS_WIN) return kind === "claude" ? ["-NoLogo", "-NoExit", "-Command", CLAUDE_CMD] : ["-NoLogo"];
-  return kind === "claude" ? ["-lic", `${CLAUDE_CMD}; exec zsh`] : ["-l", "-i"];
+function shellArgs(kind: TermKind, command?: string): string[] {
+  const startup = command ?? (kind === "claude" ? CLAUDE_CMD : null);
+  if (IS_WIN) return startup ? ["-NoLogo", "-NoExit", "-Command", startup] : ["-NoLogo"];
+  return startup ? ["-lic", `${startup}; exec zsh`] : ["-l", "-i"];
+}
+
+export interface CreateOpts {
+  /** run this first, then stay in the shell (prisma migrate dev, say) */
+  command?: string;
+  /** layered over the pane env — how a DATABASE_URL reaches it without touching argv */
+  env?: Record<string, string>;
+  title?: string;
 }
 
 class TermManager {
@@ -148,12 +157,12 @@ class TermManager {
     return this.activeId ? (this.sessions.get(this.activeId) ?? null) : null;
   }
 
-  create(kind: TermKind, cwd: string, cols = 80, rows = 24): TermSession {
+  create(kind: TermKind, cwd: string, cols = 80, rows = 24, opts: CreateOpts = {}): TermSession {
     this.ensureStarted();
     const id = `t${++this.seq}`;
     const term = new Terminal({ cols, rows, allowProposedApi: true, scrollback: 5000 });
     const n = this.order.filter((oid) => this.sessions.get(oid)?.kind === kind).length + 1;
-    const title = kind === "claude" ? `claude ${n}` : `shell ${n}`;
+    const title = opts.title ?? (kind === "claude" ? `claude ${n}` : `shell ${n}`);
     const sess: TermSession = {
       id,
       title,
@@ -178,7 +187,11 @@ class TermManager {
     // as a startup command (-NoExit so the pane survives claude quitting, and so
     // it runs reliably *after* your profile finishes loading — writing the
     // command as keystrokes races a slow profile).
-    this.host.spawn({ id, file: SHELL_FILE, args: shellArgs(kind), cwd, cols, rows, env: SHELL_ENV });
+    // A command for a W:\ project runs in the distro, then leaves you in its zsh.
+    const env = { ...SHELL_ENV, ...opts.env };
+    const wsl = opts.command ? inDistro(cwd, opts.command, { ...env, SAL_NO_PICK: "1" }, true) : null;
+    const [file = SHELL_FILE, ...args] = wsl?.argv ?? [SHELL_FILE, ...shellArgs(kind, opts.command)];
+    this.host.spawn({ id, file, args, cwd: wsl?.cwd ?? cwd, cols, rows, env: wsl?.env ?? env });
 
     this.bump();
     return sess;

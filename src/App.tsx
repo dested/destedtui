@@ -23,6 +23,8 @@ import { Review } from "./screens/Review.tsx";
 import { Keys } from "./screens/Keys.tsx";
 import { ClaudeUsage } from "./screens/ClaudeUsage.tsx";
 import { Tabs } from "./screens/Tabs.tsx";
+import { Project } from "./screens/Project.tsx";
+import { projectAt } from "./lib/project/context.ts";
 import { projectsRoot, recordProjectOpen } from "./lib/projects.ts";
 import { announceCd, announceRun, emitCd } from "./lib/cd.ts";
 import { isBusy, watchIdle } from "./lib/idle.ts";
@@ -167,15 +169,16 @@ export function App({
   return (
     <box style={{ flexGrow: 1, flexDirection: "column", backgroundColor: T.bg }}>
       <Header subtitle={cwd} />
-      {route.name === "menu" && <MainMenu discovery={discovery} go={go} quit={quit} />}
+      {route.name === "menu" && <MainMenu discovery={discovery} project={projectAt(cwd)?.name ?? null} go={go} quit={quit} />}
       {route.name === "scripts" && discovery && <Scripts discovery={discovery} go={go} back={back} />}
       {route.name === "process" && <ProcessView pkg={route.pkg} script={route.script} back={back} />}
       {route.name === "backup" && discovery && (
-        <Backup discovery={discovery} back={back} presetUrl={route.presetUrl} presetLabel={route.presetLabel} />
+        <Backup discovery={discovery} back={back} presetUrl={route.presetUrl} presetLabel={route.presetLabel} presetDir={route.presetDir} />
       )}
       {route.name === "restore" && discovery && <Restore discovery={discovery} back={back} preset={route.preset} />}
       {route.name === "localdb" && <LocalDb go={go} back={back} />}
-      {route.name === "pull" && discovery && <Pull discovery={discovery} back={back} />}
+      {route.name === "pull" && discovery && <Pull discovery={discovery} back={back} preset={route.preset} />}
+      {route.name === "project" && <Project cwd={route.dir ?? cwd} go={go} back={stack.length > 1 ? back : quit} />}
       {route.name === "startup" && <Startup back={stack.length > 1 ? back : quit} />}
       {route.name === "term" && <Term cwd={cwd} back={stack.length > 1 ? back : quit} />}
       {route.name === "ports" && <Ports choose={chooseProject} back={stack.length > 1 ? back : quit} />}
