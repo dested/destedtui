@@ -296,6 +296,10 @@ Single-process TUI. `App` holds a route **stack** (push/pop = navigation; esc po
 
 ## Gotchas & hard rules
 
+- **One tree, two OSes (since 2026-11-04).** `W:\code\destedtui` is the only copy; Windows runs it through
+  `\\wsl.localhost\sal\w\code\destedtui` links (bun global link; the profile loads `shell\destedtui.ps1` from W:), so `node_modules` holds every
+  platform's packages. Reinstall from scratch with `bun install --os='*' --cpu='*'`; never `bun install`
+  from the Windows side, and a plain one in WSL only on an existing tree.
 - **useKeyboard fires globally** for every mounted component — only mount one screen at a time, and beware double-handling enter: an `<input onSubmit>` and a `useKeyboard("return")` both fire on the same keypress (already bitten twice; pick one owner per screen).
 - **ListPicker `vimKeys` must stay off** on any screen with a text input (j/k would collide with typing).
 - **Never buffer a dump in memory** — dumps can be multi-GB; all zip paths go through the streaming helpers in `lib/zip.ts`.

@@ -95,7 +95,9 @@ $Begin
 # requires to be the first statements in the file.
 #
 # Managed by: destedtui --install-shell   (remove: install.ps1 -Uninstall)
-if (Test-Path '$integration') { . '$integration' }
+# Loaded as a script block: the checkout lives on W:\ (the WSL share), which RemoteSigned treats as
+# remote, so dot-sourcing the unsigned file itself is refused.
+if (Test-Path '$integration') { . ([scriptblock]::Create((Get-Content -Raw '$integration'))) }
 $End
 "@
 
